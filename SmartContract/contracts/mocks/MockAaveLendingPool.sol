@@ -59,7 +59,7 @@ contract MockAaveLendingPool {
      * @param onBehalfOf The address that will receive the aTokens
      * @param referralCode Code used to register the integrator
      */
-    function deposit(
+    function supply(
         address asset,
         uint256 amount,
         address onBehalfOf,
@@ -102,36 +102,7 @@ contract MockAaveLendingPool {
         return amount;
     }
 
-    /**
-     * @dev Returns the user account data across all the reserves
-     * @param user The address of the user
-     * @return totalCollateralETH the total collateral in ETH of the user
-     * @return totalDebtETH the total debt in ETH of the user
-     * @return availableBorrowsETH the borrowing power left of the user
-     * @return currentLiquidationThreshold the liquidation threshold of the user
-     * @return ltv the loan to value of the user
-     * @return healthFactor the current health factor of the user
-     */
-    function getUserAccountData(address user)
-        external
-        view
-        returns (
-            uint256 totalCollateralETH,
-            uint256 totalDebtETH,
-            uint256 availableBorrowsETH,
-            uint256 currentLiquidationThreshold,
-            uint256 ltv,
-            uint256 healthFactor
-        )
-    {
-        // Mock values for testing
-        totalCollateralETH = 1000 * 1e18; // 1000 ETH worth
-        totalDebtETH = 500 * 1e18; // 500 ETH worth
-        availableBorrowsETH = 300 * 1e18; // 300 ETH worth
-        currentLiquidationThreshold = 8000; // 80%
-        ltv = 7500; // 75%
-        healthFactor = 2 * 1e18; // 2.0 (healthy)
-    }
+ 
 
     /**
      * @dev Returns the configuration of the reserve

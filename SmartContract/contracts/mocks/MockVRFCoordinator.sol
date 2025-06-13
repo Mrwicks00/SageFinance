@@ -16,6 +16,7 @@ contract MockVRFCoordinator {
 
     mapping(uint256 => RequestCommitment) public requests;
     uint256 private requestIdCounter = 1;
+    uint256 private nextRequestId;
 
     event RandomWordsRequested(
         bytes32 indexed keyHash,
@@ -36,6 +37,13 @@ contract MockVRFCoordinator {
     );
 
     /**
+     * @dev Set the next request ID for testing purposes
+     */
+    function setNextRequestId(uint256 _requestId) external {
+        nextRequestId = _requestId;
+    }
+
+    /**
      * @dev Request random words (mock implementation)
      */
     function requestRandomWords(
@@ -45,7 +53,12 @@ contract MockVRFCoordinator {
         uint32 callbackGasLimit,
         uint32 numWords
     ) external returns (uint256 requestId) {
-        requestId = requestIdCounter++;
+        if (nextRequestId != 0) {
+            requestId = nextRequestId;
+            nextRequestId = 0; // Reset after use
+        } else {
+            requestId = requestIdCounter++;
+        }
         
         requests[requestId] = RequestCommitment({
             blockNum: uint64(block.number),

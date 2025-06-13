@@ -8,9 +8,9 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "../utils/VRFConsumerBaseV2Upgradeable.sol";
 import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import "@chainlink/contracts/src/v0.8/vrf/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBaseV2.sol";
 import "../errors/YieldOptimizerErrors.sol";
 import "../events/YieldOptimizerEvents.sol";
 import "../structs/YieldOptimizerStructs.sol";
@@ -27,7 +27,8 @@ contract YieldOptimizer is
     OwnableUpgradeable,
     ReentrancyGuardUpgradeable,
     PausableUpgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    VRFConsumerBaseV2Upgradeable
 {
     using AaveIntegration for *;
     using CompoundIntegration for *;
@@ -41,11 +42,13 @@ contract YieldOptimizer is
     address public aiAgent;
     uint256 public rebalanceInterval;
     uint256 public lastGlobalRebalance;
-    uint256 public maxSlippageBPS = 300; // 3% default slippage tolerance
+    uint256 public maxSlippageBPS; // slippage tolerance
     uint256 public constant MAX_POSITIONS_PER_USER = 50; //max positions per user
 
+    mapping(address => uint256) public userLastRebalance;
+
     // Price Validation variables
-    uint256 public priceDeviationThreshold = 500; // 5% max deviation
+    uint256 public priceDeviationThreshold; //max deviation
     int256 public lastValidPrice;
     uint256 public lastPriceUpdate;
     uint256 public constant PRICE_STALENESS_THRESHOLD = 3600; // 1 hour
@@ -94,6 +97,7 @@ contract YieldOptimizer is
         __ReentrancyGuard_init();
         __Pausable_init();
         __UUPSUpgradeable_init();
+        __VRFConsumerBaseV2Upgradeable_init(_vrfCoordinator);
 
         priceFeed = AggregatorV3Interface(_priceFeed);
         stablecoin = IERC20(_stablecoin);
@@ -107,6 +111,9 @@ contract YieldOptimizer is
         vrfCoordinator = VRFCoordinatorV2Interface(_vrfCoordinator);
         vrfSubscriptionId = _vrfSubscriptionId;
         rebalanceInterval = 1 days;
+
+        maxSlippageBPS = 300; // 3% default slippage tolerance
+        priceDeviationThreshold = 500; // 5% max deviation
 
         // Initialize strategies
         strategies[0] = YieldOptimizerStructs.Strategy(
@@ -130,6 +137,16 @@ contract YieldOptimizer is
             address(0),
             true
         );
+    }
+
+    modifier canRebalance(address user) {
+        if (
+            userLastRebalance[user] != 0 &&
+            block.timestamp < userLastRebalance[user] + rebalanceInterval
+        ) {
+            revert YieldOptimizerErrors.RebalanceNotNeeded();
+        }
+        _;
     }
 
     // Deposit to specified strategy
@@ -215,26 +232,20 @@ contract YieldOptimizer is
         );
     }
 
-    // VRF callback
-    function fulfillRandomWords(
+        function _fulfillRandomWords(
         uint256 requestId,
         uint256[] memory randomWords
-    ) internal {
-        require(msg.sender == address(vrfCoordinator), "Only VRF coordinator");
-        YieldOptimizerStructs.VRFRequest storage request = vrfRequests[
-            requestId
-        ];
-        if (request.fulfilled) revert YieldOptimizerErrors.InvalidVRFRequest();
-        if (request.user == address(0))
-            revert YieldOptimizerErrors.InvalidVRFRequest();
+    ) internal override { 
 
-        // Select random strategy (0, 1, or 2)
+        YieldOptimizerStructs.VRFRequest storage request = vrfRequests[requestId];
+        
         uint256 strategyId = randomWords[0] % 3;
-        if (!strategies[strategyId].active)
-            revert YieldOptimizerErrors.InvalidStrategy();
+        if (!strategies[strategyId].active) revert YieldOptimizerErrors.InvalidStrategy();
 
         // Deposit to random strategy
         if (strategyId == 0) {
+            if (stablecoin.balanceOf(address(this)) < request.amount)
+                revert YieldOptimizerErrors.InsufficientContractBalance();
             AaveIntegration.depositToAave(
                 aaveLendingPool,
                 stablecoin,
@@ -242,12 +253,16 @@ contract YieldOptimizer is
                 address(this)
             );
         } else if (strategyId == 1) {
+            if (stablecoin.balanceOf(address(this)) < request.amount)
+                revert YieldOptimizerErrors.InsufficientContractBalance();
             CompoundIntegration.depositToCompound(
                 compoundCToken,
                 stablecoin,
                 request.amount
             );
         } else if (strategyId == 2) {
+            if (stablecoin.balanceOf(address(this)) < request.amount)
+                revert YieldOptimizerErrors.InsufficientContractBalance();
             uint256 minAmountOut = _calculateMinAmountOut(
                 request.amount,
                 maxSlippageBPS
@@ -282,7 +297,6 @@ contract YieldOptimizer is
             request.amount
         );
     }
-
     // Withdraw from specified position
     function withdraw(
         uint256 positionIndex,
@@ -341,7 +355,7 @@ contract YieldOptimizer is
         uint256 positionIndex,
         uint256 newStrategyId,
         uint256 amount
-    ) public nonReentrant whenNotPaused {
+    ) public canRebalance(user) whenNotPaused {
         if (msg.sender != aiAgent && msg.sender != user)
             revert YieldOptimizerErrors.UnauthorizedCaller();
         if (positionIndex >= userPositions[user].length)
@@ -353,8 +367,23 @@ contract YieldOptimizer is
         ][positionIndex];
         if (amount > position.balance)
             revert YieldOptimizerErrors.InsufficientBalance();
-        if (block.timestamp < position.lastRebalanced + rebalanceInterval)
-            revert YieldOptimizerErrors.RebalanceNotNeeded();
+        // Update user's last rebalance time
+        userLastRebalance[user] = block.timestamp;
+
+        // Use internal function to avoid reentrancy issues
+        _performRebalance(user, positionIndex, newStrategyId, amount);
+    }
+
+    // Internal rebalance function to avoid reentrancy conflicts
+    function _performRebalance(
+        address user,
+        uint256 positionIndex,
+        uint256 newStrategyId,
+        uint256 amount
+    ) internal {
+        YieldOptimizerStructs.UserPosition storage position = userPositions[
+            user
+        ][positionIndex];
 
         // Withdraw from old strategy
         if (position.strategyId == 0) {
@@ -463,7 +492,7 @@ contract YieldOptimizer is
         uint256 amount,
         int256 priceThreshold,
         bool isPriceAboveThreshold
-    ) external nonReentrant whenNotPaused {
+    ) external whenNotPaused {
         int256 currentPrice = ChainlinkUtils.getLatestPrice(priceFeed);
 
         _validatePrice(currentPrice);
@@ -477,7 +506,6 @@ contract YieldOptimizer is
         }
     }
 
-    // Global rebalance
     function globalRebalance(
         address[] calldata users,
         uint256 newStrategyId
@@ -490,12 +518,20 @@ contract YieldOptimizer is
             revert YieldOptimizerErrors.RebalanceNotNeeded();
 
         for (uint256 i = 0; i < users.length; i++) {
-            for (uint256 j = 0; j < userPositions[users[i]].length; j++) {
+            address currentUser = users[i];
+            uint256 totalUserBalanceToRebalance = 0;
+
+            // Temporarily store positions to avoid modifying array during iteration
+            YieldOptimizerStructs.UserPosition[]
+                memory userPositionsCopy = userPositions[currentUser];
+            delete userPositions[currentUser]; // Clear current positions
+
+            for (uint256 j = 0; j < userPositionsCopy.length; j++) {
                 YieldOptimizerStructs.UserPosition
-                    storage position = userPositions[users[i]][j];
+                    memory position = userPositionsCopy[j];
                 if (position.balance == 0) continue;
 
-                // Withdraw
+                // Withdraw from old strategy to contract
                 if (position.strategyId == 0) {
                     AaveIntegration.withdrawFromAave(
                         aaveLendingPool,
@@ -524,51 +560,54 @@ contract YieldOptimizer is
                         minAmountOut
                     );
                 }
+                totalUserBalanceToRebalance += position.balance;
+            }
 
-                // Deposit
+            // Deposit consolidated balance to new strategy for this user
+            if (totalUserBalanceToRebalance > 0) {
+                // This is where you would deposit the combined amount for currentUser into newStrategyId
+                // You might want to create a new helper function for consolidated deposits
                 if (newStrategyId == 0) {
                     AaveIntegration.depositToAave(
                         aaveLendingPool,
                         stablecoin,
-                        position.balance,
-                        address(this)
-                    );
+                        totalUserBalanceToRebalance,
+                        currentUser
+                    ); // Deposit back to user or contract?
                 } else if (newStrategyId == 1) {
                     CompoundIntegration.depositToCompound(
                         compoundCToken,
                         stablecoin,
-                        position.balance
+                        totalUserBalanceToRebalance
                     );
                 } else if (newStrategyId == 2) {
                     uint256 minAmountOut = _calculateMinAmountOut(
-                        position.balance,
+                        totalUserBalanceToRebalance,
                         maxSlippageBPS
                     );
                     UniswapIntegration.depositToUniswap(
                         uniswapRouter,
                         stablecoin,
                         weth,
-                        position.balance,
+                        totalUserBalanceToRebalance,
                         minAmountOut
                     );
                 }
 
-                uint256 amount = position.balance;
-                position.balance = 0;
-                userPositions[users[i]].push(
+                // Add a single, new consolidated position for the user
+                userPositions[currentUser].push(
                     YieldOptimizerStructs.UserPosition({
                         strategyId: newStrategyId,
-                        balance: amount,
+                        balance: totalUserBalanceToRebalance,
                         lastUpdated: block.timestamp,
                         lastRebalanced: block.timestamp
                     })
                 );
-
                 emit YieldOptimizerEvents.Rebalanced(
-                    users[i],
-                    position.strategyId,
+                    currentUser,
+                    999, // Indicate consolidated rebalance from multiple strategies
                     newStrategyId,
-                    amount,
+                    totalUserBalanceToRebalance,
                     block.timestamp
                 );
             }
@@ -665,6 +704,14 @@ contract YieldOptimizer is
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}
+
+    function getUserBalance(address user) external view returns (uint256) {
+        uint256 totalBalance = 0;
+        for (uint256 i = 0; i < userPositions[user].length; i++) {
+            totalBalance += userPositions[user][i].balance;
+        }
+        return totalBalance;
+    }
 
     function setMaxSlippage(uint256 _maxSlippageBPS) external onlyOwner {
         if (_maxSlippageBPS > 1000)

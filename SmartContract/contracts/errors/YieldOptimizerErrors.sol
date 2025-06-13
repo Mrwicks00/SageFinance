@@ -15,4 +15,6 @@ library YieldOptimizerErrors {
     error ZeroAddress();
     error InvalidStrategy();
     error InvalidVRFRequest();
+    error RebalanceFailed();
+    error InsufficientContractBalance();
 }
