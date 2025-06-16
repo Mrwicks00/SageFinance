@@ -3,42 +3,38 @@ pragma solidity ^0.8.20;
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "../utils/VRFConsumerBaseV2Upgradeable.sol";
+import "../interfaces/IERC20WithDecimals.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import "@chainlink/contracts/src/v0.8/vrf/interfaces/VRFCoordinatorV2Interface.sol";
+import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 import "../errors/YieldOptimizerErrors.sol";
 import "../events/YieldOptimizerEvents.sol";
 import "../structs/YieldOptimizerStructs.sol";
 import "../integrations/AaveIntegration.sol";
-import "../integrations/CompoundIntegration.sol";
 import "../integrations/UniswapIntegration.sol";
-import "../libraries/ChainlinkUtils.sol";
+import "../integrations/CompoundIntegration.sol";
+import "../interfaces/ICompoundV3Comet.sol";
 import "../interfaces/IAaveLendingPool.sol";
-import "../interfaces/ICompoundCToken.sol";
 import "../interfaces/IUniswapV3Router.sol";
 
 contract YieldOptimizer is
-    Initializable,
-    OwnableUpgradeable,
-    ReentrancyGuardUpgradeable,
-    PausableUpgradeable,
-    UUPSUpgradeable,
-    VRFConsumerBaseV2Upgradeable
+    ReentrancyGuard,
+    Pausable,
+    VRFConsumerBaseV2Plus
 {
     using AaveIntegration for *;
     using CompoundIntegration for *;
     using UniswapIntegration for *;
-    using ChainlinkUtils for IERC20;
     using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20WithDecimals;
 
-    AggregatorV3Interface public priceFeed; // USDC/ETH
-    IERC20 public stablecoin; // USDC
-    IERC20 public weth; // WETH
+  
+    AggregatorV3Interface public ethUsdPriceFeed;
+    AggregatorV3Interface public usdcUsdPriceFeed;
+    IERC20WithDecimals public stablecoin; // USDC
+    IERC20WithDecimals public weth;       // WETH 
     address public aiAgent;
     uint256 public rebalanceInterval;
     uint256 public lastGlobalRebalance;
@@ -55,14 +51,12 @@ contract YieldOptimizer is
 
     // Protocol contracts
     IAaveLendingPool public aaveLendingPool;
-    ICompoundCToken public compoundCToken;
+    ICompoundV3Comet public compoundComet;
     IUniswapV3Router public uniswapRouter;
 
     // VRF configuration
-    VRFCoordinatorV2Interface public vrfCoordinator;
-    uint64 public vrfSubscriptionId;
-    bytes32 public constant KEY_HASH =
-        0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c; // Sepolia 150 gwei
+    uint256 public vrfSubscriptionId;
+    bytes32 public vrfKeyHash;
     uint32 public constant CALLBACK_GAS_LIMIT = 100000;
     uint16 public constant REQUEST_CONFIRMATIONS = 3;
     uint32 public constant NUM_WORDS = 1;
@@ -77,39 +71,31 @@ contract YieldOptimizer is
     mapping(address => bool) private _withdrawInProgress;
     mapping(address => bool) private _rebalanceInProgress;
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(
-        address _priceFeed,
+    constructor(
+        address _ethUsdPriceFeed, // New argument
+        address _usdcUsdPriceFeed, // New argument
         address _stablecoin,
         address _weth,
         address _aiAgent,
         address _aaveLendingPool,
-        address _compoundCToken,
+        address _compoundComet,
         address _uniswapRouter,
         address _vrfCoordinator,
-        uint64 _vrfSubscriptionId
-    ) external initializer {
-        __Ownable_init(msg.sender);
-        __ReentrancyGuard_init();
-        __Pausable_init();
-        __UUPSUpgradeable_init();
-        __VRFConsumerBaseV2Upgradeable_init(_vrfCoordinator);
-
-        priceFeed = AggregatorV3Interface(_priceFeed);
-        stablecoin = IERC20(_stablecoin);
-        weth = IERC20(_weth);
+        uint256 _vrfSubscriptionId,
+        bytes32 _keyHash
+    ) VRFConsumerBaseV2Plus(_vrfCoordinator) {
+        ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeed);
+        usdcUsdPriceFeed = AggregatorV3Interface(_usdcUsdPriceFeed);
+        stablecoin = IERC20WithDecimals(_stablecoin); 
+        weth = IERC20WithDecimals(_weth);    
         aiAgent = _aiAgent;
         aaveLendingPool = IAaveLendingPool(_aaveLendingPool);
-        compoundCToken = ICompoundCToken(_compoundCToken);
+        compoundComet = ICompoundV3Comet(_compoundComet);
         uniswapRouter = IUniswapV3Router(_uniswapRouter);
         if (_vrfCoordinator == address(0))
             revert YieldOptimizerErrors.ZeroAddress();
-        vrfCoordinator = VRFCoordinatorV2Interface(_vrfCoordinator);
         vrfSubscriptionId = _vrfSubscriptionId;
+        vrfKeyHash = _keyHash;
         rebalanceInterval = 1 days;
 
         maxSlippageBPS = 300; // 3% default slippage tolerance
@@ -126,10 +112,11 @@ contract YieldOptimizer is
         strategies[1] = YieldOptimizerStructs.Strategy(
             1,
             "Compound",
-            address(compoundCToken),
-            address(compoundCToken),
+            address(compoundComet), 
+            address(0),             
             true
         );
+
         strategies[2] = YieldOptimizerStructs.Strategy(
             2,
             "Uniswap",
@@ -171,7 +158,7 @@ contract YieldOptimizer is
             );
         } else if (strategyId == 1) {
             CompoundIntegration.depositToCompound(
-                compoundCToken,
+                compoundComet, 
                 stablecoin,
                 amount
             );
@@ -211,13 +198,16 @@ contract YieldOptimizer is
         stablecoin.safeTransferFrom(msg.sender, address(this), amount);
 
         // Request VRF randomness
-        requestId = vrfCoordinator.requestRandomWords(
-            KEY_HASH,
-            vrfSubscriptionId,
-            REQUEST_CONFIRMATIONS,
-            CALLBACK_GAS_LIMIT,
-            NUM_WORDS
-        );
+        requestId = s_vrfCoordinator.requestRandomWords(
+        VRFV2PlusClient.RandomWordsRequest({
+            keyHash: vrfKeyHash, // Use your vrfKeyHash state variable
+            subId: vrfSubscriptionId, // Use your vrfSubscriptionId state variable (now uint256)
+            requestConfirmations: REQUEST_CONFIRMATIONS,
+            callbackGasLimit: CALLBACK_GAS_LIMIT,
+            numWords: NUM_WORDS,
+            extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false})) // Pay with LINK
+        })
+    );
 
         vrfRequests[requestId] = YieldOptimizerStructs.VRFRequest({
             user: msg.sender,
@@ -232,9 +222,9 @@ contract YieldOptimizer is
         );
     }
 
-        function _fulfillRandomWords(
+    function fulfillRandomWords(
         uint256 requestId,
-        uint256[] memory randomWords
+        uint256[] calldata randomWords
     ) internal override { 
 
         YieldOptimizerStructs.VRFRequest storage request = vrfRequests[requestId];
@@ -256,7 +246,7 @@ contract YieldOptimizer is
             if (stablecoin.balanceOf(address(this)) < request.amount)
                 revert YieldOptimizerErrors.InsufficientContractBalance();
             CompoundIntegration.depositToCompound(
-                compoundCToken,
+                compoundComet, 
                 stablecoin,
                 request.amount
             );
@@ -297,6 +287,7 @@ contract YieldOptimizer is
             request.amount
         );
     }
+    
     // Withdraw from specified position
     function withdraw(
         uint256 positionIndex,
@@ -319,7 +310,7 @@ contract YieldOptimizer is
             );
         } else if (position.strategyId == 1) {
             CompoundIntegration.withdrawFromCompound(
-                compoundCToken,
+                compoundComet,
                 amount,
                 stablecoin,
                 msg.sender
@@ -393,9 +384,9 @@ contract YieldOptimizer is
                 amount,
                 address(this)
             );
-        } else if (position.strategyId == 1) {
+       } else if (position.strategyId == 1) {
             CompoundIntegration.withdrawFromCompound(
-                compoundCToken,
+                compoundComet, 
                 amount,
                 stablecoin,
                 address(this)
@@ -425,7 +416,7 @@ contract YieldOptimizer is
             );
         } else if (newStrategyId == 1) {
             CompoundIntegration.depositToCompound(
-                compoundCToken,
+                compoundComet, 
                 stablecoin,
                 amount
             );
@@ -462,49 +453,56 @@ contract YieldOptimizer is
         );
     }
 
-    function _validatePrice(int256 currentPrice) private {
-        if (block.timestamp - lastPriceUpdate > PRICE_STALENESS_THRESHOLD) {
-            if (lastValidPrice > 0) {
-                uint256 deviation = lastValidPrice > currentPrice
-                    ? uint256(
-                        ((lastValidPrice - currentPrice) * 10000) /
-                            lastValidPrice
-                    )
-                    : uint256(
-                        ((currentPrice - lastValidPrice) * 10000) /
-                            lastValidPrice
-                    );
+    function _validatePrice() private {
+    // CurrentPrice will now be the USDC/USD price if fetched this way
+    // Fetch USDC/USD price
+    (, int256 usdcUsdCurrentPrice, , ,) = usdcUsdPriceFeed.latestRoundData();
+    require(usdcUsdCurrentPrice > 0, "Invalid USDC/USD price for validation");
 
-                if (deviation > priceDeviationThreshold) {
-                    revert YieldOptimizerErrors.PriceManipulationDetected();
-                }
+    if (block.timestamp - lastPriceUpdate > PRICE_STALENESS_THRESHOLD) {
+        if (lastValidPrice > 0) {
+            uint256 deviation = lastValidPrice > usdcUsdCurrentPrice
+                ? uint256(
+                    ((lastValidPrice - usdcUsdCurrentPrice) * 10000) /
+                        lastValidPrice
+                )
+                : uint256(
+                    ((usdcUsdCurrentPrice - lastValidPrice) * 10000) /
+                        lastValidPrice
+                );
+
+            if (deviation > priceDeviationThreshold) {
+                revert YieldOptimizerErrors.PriceManipulationDetected();
             }
         }
-
-        lastValidPrice = currentPrice;
-        lastPriceUpdate = block.timestamp;
     }
+
+    lastValidPrice = usdcUsdCurrentPrice; // Store the USD value of USDC
+    lastPriceUpdate = block.timestamp;
+}
 
     // Rebalance if price threshold is met
-    function rebalanceIfPriceThreshold(
-        uint256 positionIndex,
-        uint256 newStrategyId,
-        uint256 amount,
-        int256 priceThreshold,
-        bool isPriceAboveThreshold
-    ) external whenNotPaused {
-        int256 currentPrice = ChainlinkUtils.getLatestPrice(priceFeed);
+function rebalanceIfPriceThreshold(
+    uint256 positionIndex,
+    uint256 newStrategyId,
+    uint256 amount,
+    int256 priceThreshold, // This threshold should be in the same scale as USDC/USD price feed (e.g., 8 decimals)
+    bool isPriceAboveThreshold
+) external whenNotPaused {
+    // Directly get USDC/USD price for validation
+    (, int256 currentPrice, , ,) = usdcUsdPriceFeed.latestRoundData();
+    require(currentPrice > 0, "Invalid USDC/USD price for threshold check");
 
-        _validatePrice(currentPrice);
+    _validatePrice(); // Pass the USDC/USD price
 
-        bool shouldRebalance = isPriceAboveThreshold
-            ? currentPrice > priceThreshold
-            : currentPrice < priceThreshold;
+    bool shouldRebalance = isPriceAboveThreshold
+        ? currentPrice > priceThreshold
+        : currentPrice < priceThreshold;
 
-        if (shouldRebalance) {
-            rebalance(msg.sender, positionIndex, newStrategyId, amount);
-        }
+    if (shouldRebalance) {
+        rebalance(msg.sender, positionIndex, newStrategyId, amount);
     }
+}
 
     function globalRebalance(
         address[] calldata users,
@@ -539,9 +537,9 @@ contract YieldOptimizer is
                         position.balance,
                         address(this)
                     );
-                } else if (position.strategyId == 1) {
+               } else if (position.strategyId == 1) {
                     CompoundIntegration.withdrawFromCompound(
-                        compoundCToken,
+                        compoundComet, 
                         position.balance,
                         stablecoin,
                         address(this)
@@ -576,7 +574,7 @@ contract YieldOptimizer is
                     ); // Deposit back to user or contract?
                 } else if (newStrategyId == 1) {
                     CompoundIntegration.depositToCompound(
-                        compoundCToken,
+                        compoundComet, 
                         stablecoin,
                         totalUserBalanceToRebalance
                     );
@@ -669,10 +667,12 @@ contract YieldOptimizer is
         emit YieldOptimizerEvents.PositionsConsolidated(msg.sender);
     }
 
-    // Get latest price
-    function getLatestPrice() external view returns (int256) {
-        return ChainlinkUtils.getLatestPrice(priceFeed);
-    }
+  // Get latest USDC/USD price
+function getLatestPrice() external view returns (int256) {
+    (, int256 price, , ,) = usdcUsdPriceFeed.latestRoundData();
+    if (price <= 0) revert YieldOptimizerErrors.InvalidPriceFeed();
+    return price;
+}
 
     // Update AI agent
     function setAIAgent(address _newAgent) external onlyOwner {
@@ -700,11 +700,6 @@ contract YieldOptimizer is
         IERC20(token).safeTransfer(owner(), amount);
     }
 
-    // Required by UUPS
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal override onlyOwner {}
-
     function getUserBalance(address user) external view returns (uint256) {
         uint256 totalBalance = 0;
         for (uint256 i = 0; i < userPositions[user].length; i++) {
@@ -723,9 +718,20 @@ contract YieldOptimizer is
         uint256 amountIn,
         uint256 slippageBPS
     ) private view returns (uint256) {
-        int256 currentPrice = ChainlinkUtils.getLatestPrice(priceFeed);
-        uint256 expectedOut = (amountIn * uint256(currentPrice)) /
-            (10 ** priceFeed.decimals());
+        // Fetch ETH/USD price
+        (, int256 ethUsdPrice, , ,) = ethUsdPriceFeed.latestRoundData();
+        require(ethUsdPrice > 0, "Invalid ETH/USD price");
+        // uint256 ethUsdDecimals = uint256(ethUsdPriceFeed.decimals());
+
+        // Fetch USDC/USD price
+        (, int256 usdcUsdPrice, , ,) = usdcUsdPriceFeed.latestRoundData();
+        require(usdcUsdPrice > 0, "Invalid USDC/USD price");
+        // uint256 usdcUsdDecimals = uint256(usdcUsdPriceFeed.decimals());
+
+        // Calculate USDC/ETH rate and expected output amount
+        uint256 expectedOut = (amountIn * uint256(usdcUsdPrice) * (10**(weth.decimals() - stablecoin.decimals()))) / uint256(ethUsdPrice);
+
+        // Apply slippage
         return (expectedOut * (10000 - slippageBPS)) / 10000;
     }
 }

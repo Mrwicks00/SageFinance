@@ -1,18 +1,20 @@
 import { expect } from "chai";
-import { ethers, upgrades } from "hardhat";
+import { ethers } from "hardhat"; // Removed `upgrades` import
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   YieldOptimizer,
   MockERC20,
   MockAggregatorV3Interface,
-  MockVRFCoordinator,
+  MockVRFCoordinator, // Using your custom mock here
   MockAaveLendingPool,
   MockCompoundCToken,
   MockUniswapV3Router,
 } from "../typechain-types";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-describe("YieldOptimizer - Extended Test Suite", function () {
+// Removed: require("@openzeppelin/hardhat-upgrades"); as it's not needed in test file
+
+describe("YieldOptimizer - Extended Test Suite (Non-Upgradeable)", function () {
   let yieldOptimizer: YieldOptimizer;
   let mockUSDC: MockERC20;
   let mockWETH: MockERC20;
@@ -72,29 +74,28 @@ describe("YieldOptimizer - Extended Test Suite", function () {
     );
     mockUniswapRouter = await MockUniswapFactory.deploy();
 
-    // Deploy YieldOptimizer as upgradeable proxy
+    // --- START OF CHANGES FOR NON-UPGRADEABLE CONTRACT ---
+
+    // Deploy YieldOptimizer directly (non-upgradeable)
+    // Ensure your YieldOptimizer contract now has a constructor that accepts these arguments.
     const YieldOptimizerFactory = await ethers.getContractFactory(
       "YieldOptimizer"
     );
 
-    yieldOptimizer = (await upgrades.deployProxy(
-      YieldOptimizerFactory,
-      [
-        await mockPriceFeed.getAddress(),
-        await mockUSDC.getAddress(),
-        await mockWETH.getAddress(),
-        aiAgent.address,
-        await mockAaveLendingPool.getAddress(),
-        await mockCompoundCToken.getAddress(),
-        await mockUniswapRouter.getAddress(),
-        await mockVRFCoordinator.getAddress(),
-        1,
-      ],
-      {
-        initializer: "initialize",
-        kind: "uups",
-      }
-    )) as unknown as YieldOptimizer;
+    yieldOptimizer = await YieldOptimizerFactory.deploy(
+      await mockPriceFeed.getAddress(),
+      await mockUSDC.getAddress(),
+      await mockWETH.getAddress(),
+      aiAgent.address,
+      await mockAaveLendingPool.getAddress(),
+      await mockCompoundCToken.getAddress(),
+      await mockUniswapRouter.getAddress(),
+      await mockVRFCoordinator.getAddress(),
+      1 ,
+      owner.address// Assuming this is a static subscriptionId or keyHash for your mock
+    );
+
+    // --- END OF CHANGES FOR NON-UPGRADEABLE CONTRACT ---
 
     // Setup initial token balances
     await mockUSDC.mint(user1.address, INITIAL_USDC_SUPPLY);
@@ -631,12 +632,12 @@ describe("YieldOptimizer - Extended Test Suite", function () {
     });
 
     // it("Should handle contract with no balance", async function () {
-    //   // Test withdrawal when contract has no tokens
-    //   await yieldOptimizer.connect(user1).deposit(0, DEPOSIT_AMOUNT);
+    //  // Test withdrawal when contract has no tokens
+    //  await yieldOptimizer.connect(user1).deposit(0, DEPOSIT_AMOUNT);
 
-    //   await mockUSDC.burn(await yieldOptimizer.getAddress(), DEPOSIT_AMOUNT);
-    //   // Withdrawal should handle gracefully or revert appropriately
-    //   // Implementation depends on your error handling strategy
+    //  await mockUSDC.burn(await yieldOptimizer.getAddress(), DEPOSIT_AMOUNT);
+    //  // Withdrawal should handle gracefully or revert appropriately
+    //  // Implementation depends on your error handling strategy
     // });
 
     it("Should handle very large deposits", async function () {
