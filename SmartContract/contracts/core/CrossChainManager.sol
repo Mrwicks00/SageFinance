@@ -10,7 +10,6 @@ import "@chainlink/contracts-ccip/contracts/applications/CCIPReceiver.sol";
 import "@chainlink/contracts-ccip/contracts/libraries/Client.sol";
 import "../interfaces/IYieldOptimizer.sol";
 import "../errors/CrossChainManagerErrors.sol";
-// import "../events/CrossChainManagerEvents.sol"; // <--- REMOVED THIS IMPORT
 import "../structs/CrossChainManagerStructs.sol";
 
 contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
@@ -19,8 +18,11 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
     IRouterClient public ccipRouter;
     IERC20 public stablecoin; // USDC
     address public aiAgent;
-    address public yieldOptimizer; // YieldOptimizer contract on this chain
-    uint256 public defaultStrategyId; // Default strategy for cross-chain deposits
+    IYieldOptimizer public yieldOptimizer;
+    uint256 public defaultStrategyId;
+    
+    // Add current chain selector as a state variable
+    uint64 public currentChainSelector;
 
     // Chain selectors for supported testnets
     mapping(uint64 => bool) public supportedChains;
@@ -28,10 +30,9 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
     uint256 public constant RATE_LIMIT_AMOUNT = 10000e6; // 10,000 USDC
     uint256 public constant RATE_LIMIT_WINDOW = 1 hours;
     mapping(address => mapping(uint64 => uint256)) public lastTransferTimestamp;
-    mapping(address => mapping(uint64 => uint256))
-        public transferAmountInWindow;
+    mapping(address => mapping(uint64 => uint256)) public transferAmountInWindow;
 
-    // --- EVENTS (Declared directly in CrossChainManager.sol) ---
+    // --- EVENTS ---
     event CrossChainTransferInitiated(
         address indexed sender,
         uint256 amount,
@@ -55,43 +56,36 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
         uint256 newStrategyId,
         uint256 amount
     );
-    // Events for owner-only functions (from the test file expectations)
     event AIAgentUpdated(address indexed newAgent);
     event DefaultStrategyUpdated(uint256 indexed newStrategyId);
-    event SupportedChainUpdated(
-        uint64 indexed chainSelector,
-        bool indexed supported
-    );
+    event SupportedChainUpdated(uint64 indexed chainSelector, bool indexed supported);
     event EmergencyWithdrawal(address indexed token, uint256 amount);
     event NativeWithdrawal(uint256 amount);
-
-    // --- END EVENTS ---
+    event CurrentChainSelectorUpdated(uint64 indexed newChainSelector);
 
     constructor(
         address _ccipRouter,
         address _stablecoin,
         address _aiAgent,
-        address _yieldOptimizer
+        address _yieldOptimizer,
+        uint64 _currentChainSelector // Add this parameter
     ) CCIPReceiver(_ccipRouter) Ownable(msg.sender) {
-        if (_ccipRouter == address(0))
-            revert CrossChainManagerErrors.ZeroAddress();
-        if (_stablecoin == address(0))
-            revert CrossChainManagerErrors.ZeroAddress();
-        if (_aiAgent == address(0))
-            revert CrossChainManagerErrors.ZeroAddress();
-        if (_yieldOptimizer == address(0))
-            revert CrossChainManagerErrors.ZeroAddress();
+        if (_ccipRouter == address(0)) revert CrossChainManagerErrors.ZeroAddress();
+        if (_stablecoin == address(0)) revert CrossChainManagerErrors.ZeroAddress();
+        if (_aiAgent == address(0)) revert CrossChainManagerErrors.ZeroAddress();
+        if (_yieldOptimizer == address(0)) revert CrossChainManagerErrors.ZeroAddress();
 
         ccipRouter = IRouterClient(_ccipRouter);
         stablecoin = IERC20(_stablecoin);
         aiAgent = _aiAgent;
-        yieldOptimizer = _yieldOptimizer;
-        defaultStrategyId = 0; // Default to Aave strategy
+        yieldOptimizer = IYieldOptimizer(_yieldOptimizer);
+        defaultStrategyId = 0;
+        currentChainSelector = _currentChainSelector; // Set the current chain selector
 
         // Testnet chain selectors
         supportedChains[16015286601757825753] = true; // Sepolia
         supportedChains[3478487238524512106] = true; // Arbitrum Sepolia
-        supportedChains[11155111] = true; // Base Sepolia
+        supportedChains[10344971235874465080] = true; // Base Sepolia
     }
 
     // Cross-chain USDC transfer
@@ -114,22 +108,27 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
         stablecoin.approve(address(ccipRouter), amount);
 
         // Create token amounts array
-        Client.EVMTokenAmount[]
-            memory tokenAmounts = new Client.EVMTokenAmount[](1);
+        Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
         tokenAmounts[0] = Client.EVMTokenAmount({
             token: address(stablecoin),
             amount: amount
         });
 
-        // Encode receiver data
-        bytes memory data = abi.encode(receiver, amount);
+        // Encode receiver data with the current chain selector
+        bytes memory data = abi.encode(
+            keccak256("deposit"),
+            receiver,
+            defaultStrategyId,
+            amount,
+            currentChainSelector // Use the stored current chain selector
+        );
 
         // Create CCIP message
         Client.EVM2AnyMessage memory message = Client.EVM2AnyMessage({
-            receiver: abi.encode(address(this)), // This contract on destination chain
+            receiver: abi.encode(address(this)),
             data: data,
             tokenAmounts: tokenAmounts,
-            feeToken: address(0), // Pay in native gas
+            feeToken: address(0),
             extraArgs: Client._argsToBytes(
                 Client.EVMExtraArgsV1({gasLimit: 200_000})
             )
@@ -155,7 +154,7 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
             amount,
             destinationChainSelector,
             messageId
-        ); // <--- PREFIX REMOVED
+        );
     }
 
     // Cross-chain rebalance trigger
@@ -177,12 +176,13 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
             user,
             positionIndex,
             newStrategyId,
-            amount
+            amount,
+            currentChainSelector // Use the stored current chain selector
         );
 
         // Create CCIP message (no tokens, just data)
         Client.EVM2AnyMessage memory message = Client.EVM2AnyMessage({
-            receiver: abi.encode(address(this)), // This contract on destination chain
+            receiver: abi.encode(address(this)),
             data: data,
             tokenAmounts: new Client.EVMTokenAmount[](0),
             feeToken: address(0),
@@ -211,103 +211,100 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
             amount,
             destinationChainSelector,
             messageId
-        ); // <--- PREFIX REMOVED
+        );
     }
 
     // CCIP receive function
-    function _ccipReceive(
-        Client.Any2EVMMessage memory message
-    ) internal override {
+    function _ccipReceive(Client.Any2EVMMessage memory message) internal override {
         uint64 sourceChainSelector = message.sourceChainSelector;
         if (!supportedChains[sourceChainSelector])
             revert CrossChainManagerErrors.InvalidChainSelector();
 
         // Decode message data
         if (message.data.length > 0) {
-            // First, try to decode as a bytes32 message type.
-            // Ensure data is at least 32 bytes long for this decode to be valid.
-            if (message.data.length >= 32) {
-                bytes32 messageType = abi.decode(message.data, (bytes32));
+            bytes32 messageType = abi.decode(message.data, (bytes32));
 
-                if (messageType == keccak256("rebalance")) {
-                    // Handle rebalance message
-                    // Check if data is long enough for the full rebalance struct
-                    if (message.data.length >= 32 + 20 + 32 + 32 + 32) {
-                        // bytes32 + address + uint256*3
-                        (
-                            bytes32 decodedType, // This will be keccak256("rebalance")
-                            address user,
-                            uint256 positionIndex,
-                            uint256 newStrategyId,
-                            uint256 amount
-                        ) = abi.decode(
-                                message.data,
-                                (bytes32, address, uint256, uint256, uint256)
-                            );
-
-                        // You can assert decodedType == messageType here if you want an extra check
-                        require(decodedType == messageType, "Invalid message type decoded");
-                        IYieldOptimizer(yieldOptimizer).rebalance(
-                            user,
-                            positionIndex,
-                            newStrategyId,
-                            amount
+            if (messageType == keccak256("rebalance")) {
+                // Handle rebalance message
+                if (message.data.length >= 32 + 20 + 32 + 32 + 32 + 8) {
+                    (
+                        bytes32 decodedType,
+                        address user,
+                        uint256 positionIndex,
+                        uint256 newStrategyId,
+                        uint256 amount,
+                        uint64 originChainSelector
+                    ) = abi.decode(
+                            message.data,
+                            (bytes32, address, uint256, uint256, uint256, uint64)
                         );
-                        emit CrossChainRebalanceExecuted(
-                            user,
-                            positionIndex,
-                            newStrategyId,
-                            amount
+
+                    require(decodedType == messageType, "Invalid message type decoded");
+
+                    yieldOptimizer.rebalance(
+                        user,
+                        positionIndex,
+                        newStrategyId,
+                        amount,
+                        originChainSelector
+                    );
+                    emit CrossChainRebalanceExecuted(
+                        user,
+                        positionIndex,
+                        newStrategyId,
+                        amount
+                    );
+                } else {
+                    revert CrossChainManagerErrors.MalformedMessageData();
+                }
+            } else if (messageType == keccak256("deposit")) {
+                // Handle deposit message
+              // Handle deposit message
+                if (message.data.length >= 32 + 20 + 32 + 32 + 8) {
+                    (
+                        bytes32 decodedType,
+                        address receiver,
+                        uint256 strategyIdToDeposit,
+                        ,  // Skip amountToDeposit since it's unused
+                        uint64 originChainSelector
+                    ) = abi.decode(
+                            message.data,
+                            (bytes32, address, uint256, uint256, uint64)
+                        );
+
+                    require(decodedType == messageType, "Invalid message type decoded");
+
+                    if (message.destTokenAmounts.length > 0) {
+                        uint256 receivedAmount = message.destTokenAmounts[0].amount;
+
+                        stablecoin.approve(address(yieldOptimizer), receivedAmount);
+                        yieldOptimizer.deposit(
+                            address(stablecoin),
+                            strategyIdToDeposit,
+                            receivedAmount,
+                            originChainSelector
+                        );
+
+                        emit CrossChainTransferReceived(
+                            receiver,
+                            receivedAmount,
+                            sourceChainSelector
                         );
                     } else {
-                        // Handle malformed rebalance message (data too short)
-                        // Consider logging or reverting if this scenario implies an error
-                        // For now, it will simply not execute the rebalance if data is too short.
+                         revert CrossChainManagerErrors.NoTokensReceived();
                     }
                 } else {
-                    // If it's not a "rebalance" message, assume it's a transfer message
-                    // Check if data is long enough for address + uint256
-                    if (message.data.length >= 20 + 32) {
-                        // address (20 bytes) + uint256 (32 bytes)
-                        (address receiver, ) = abi.decode(
-                            message.data,
-                            (address, uint256)
-                        );
-
-                        // Deposit to yield optimizer using default strategy
-                        if (message.destTokenAmounts.length > 0) {
-                            uint256 receivedAmount = message
-                                .destTokenAmounts[0]
-                                .amount;
-                            stablecoin.approve(yieldOptimizer, receivedAmount);
-                            IYieldOptimizer(yieldOptimizer).deposit(
-                                defaultStrategyId,
-                                receivedAmount
-                            );
-
-                            emit CrossChainTransferReceived(
-                                receiver,
-                                receivedAmount,
-                                sourceChainSelector
-                            );
-                        }
-                    } else {
-                        // Handle malformed transfer message (data too short)
-                        // Similar to rebalance, this means no action will be taken.
-                    }
+                    revert CrossChainManagerErrors.MalformedMessageData();
                 }
+            } else {
+                revert CrossChainManagerErrors.UnknownMessageType();
             }
-            // If message.data.length < 32, it means it's too short to even be a bytes32 messageType,
-            // so we wouldn't proceed with any decoding based on type.
+        } else {
+            revert CrossChainManagerErrors.MalformedMessageData();
         }
-        // If message.data.length is 0, nothing to decode or handle.
     }
 
-    function __testReceiveCCIPMessage(
-        Client.Any2EVMMessage memory message
-    ) external {
-        // You might add an onlyOwner or similar access control here in a more robust test setup
-        // For hackathon, keeping it open for test contract is fine.
+    function __testReceiveCCIPMessage(Client.Any2EVMMessage memory message) external {
         _ccipReceive(message);
     }
 
@@ -341,14 +338,19 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
         uint64 destinationChainSelector,
         address receiver
     ) external view returns (uint256) {
-        Client.EVMTokenAmount[]
-            memory tokenAmounts = new Client.EVMTokenAmount[](1);
+        Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
         tokenAmounts[0] = Client.EVMTokenAmount({
             token: address(stablecoin),
             amount: amount
         });
 
-        bytes memory data = abi.encode(receiver, amount);
+        bytes memory data = abi.encode(
+            keccak256("deposit"),
+            receiver,
+            defaultStrategyId,
+            amount,
+            currentChainSelector // Use the stored current chain selector
+        );
 
         Client.EVM2AnyMessage memory message = Client.EVM2AnyMessage({
             receiver: abi.encode(address(this)),
@@ -363,18 +365,25 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
         return ccipRouter.getFee(destinationChainSelector, message);
     }
 
+    // Update current chain selector (owner only)
+    function setCurrentChainSelector(uint64 _chainSelector) external onlyOwner {
+        currentChainSelector = _chainSelector;
+        emit CurrentChainSelectorUpdated(_chainSelector);
+    }
+
     // Update AI agent
     function setAIAgent(address _newAgent) external onlyOwner {
         if (_newAgent == address(0))
             revert CrossChainManagerErrors.ZeroAddress();
         aiAgent = _newAgent;
-        emit AIAgentUpdated(_newAgent); // <--- PREFIX REMOVED
+        emit AIAgentUpdated(_newAgent);
     }
 
     // Update default strategy
     function setDefaultStrategy(uint256 _strategyId) external onlyOwner {
+        if (_strategyId > 1) revert CrossChainManagerErrors.InvalidStrategyId();
         defaultStrategyId = _strategyId;
-        emit DefaultStrategyUpdated(_strategyId); // <--- PREFIX REMOVED
+        emit DefaultStrategyUpdated(_strategyId);
     }
 
     // Update supported chain
@@ -383,7 +392,7 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
         bool supported
     ) external onlyOwner {
         supportedChains[chainSelector] = supported;
-        emit SupportedChainUpdated(chainSelector, supported); // <--- PREFIX REMOVED
+        emit SupportedChainUpdated(chainSelector, supported);
     }
 
     // Emergency withdraw
@@ -392,13 +401,13 @@ contract CrossChainManager is Ownable, ReentrancyGuard, CCIPReceiver {
         uint256 amount
     ) external onlyOwner {
         IERC20(token).safeTransfer(owner(), amount);
-        emit EmergencyWithdrawal(token, amount); // <--- PREFIX REMOVED
+        emit EmergencyWithdrawal(token, amount);
     }
 
     // Withdraw native tokens
     function withdrawNative(uint256 amount) external onlyOwner {
         payable(owner()).transfer(amount);
-        emit NativeWithdrawal(amount); // <--- PREFIX REMOVED
+        emit NativeWithdrawal(amount);
     }
 
     // Receive function for native token deposits

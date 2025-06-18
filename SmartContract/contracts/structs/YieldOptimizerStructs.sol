@@ -20,6 +20,8 @@ library YieldOptimizerStructs {
     struct VRFRequest {
         address user;
         uint256 amount;
+        address tokenAddress;
         bool fulfilled;
+        address[] participants;
     }
 }

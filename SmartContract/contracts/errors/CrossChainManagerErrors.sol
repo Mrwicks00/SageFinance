@@ -9,5 +9,9 @@ library CrossChainManagerErrors {
     error RateLimitExceeded();
     error ZeroAddress();
     error InsufficientFee();
+    error MalformedMessageData();
+    error UnknownMessageType();
+    error NoTokensReceived();
+    error InvalidStrategyId();
 
 }

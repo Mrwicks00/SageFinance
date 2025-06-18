@@ -11,4 +11,8 @@ library YieldOptimizerEvents {
     event Paused(address indexed owner);
     event Unpaused(address indexed owner);
     event PositionsConsolidated(address indexed user);
+    event StrategyStablecoinUpdated(uint256 strategyId, address stablecoinAddress);
+    event StrategyWethUpdated(uint256 strategyId, address wethAddress);
+    event SupportedStrategyTokenUpdated(uint256 strategyId, address tokenAddress, bool isSupported);
+    event InvalidVRFRequest(); // This was
 }

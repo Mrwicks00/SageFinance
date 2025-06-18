@@ -2,64 +2,61 @@
 pragma solidity ^0.8.20;
 
 import "../interfaces/IUniswapV3Router.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; // Still needed for IERC20.approve
+import "../interfaces/IERC20WithDecimals.sol"; // New: Import IERC20WithDecimals
 import "../errors/YieldOptimizerErrors.sol";
 
 library UniswapIntegration {
     function depositToUniswap(
         IUniswapV3Router router,
-        IERC20 stablecoin,
-        IERC20 weth,
+        IERC20WithDecimals tokenA, // Changed to IERC20WithDecimals (e.g., stablecoin)
+        IERC20WithDecimals tokenB, // Changed to IERC20WithDecimals (e.g., weth)
         uint256 amount,
-        uint256 minAmountOut // Add slippage protection parameter
+        uint256 minAmountOut
     ) internal returns (uint256 lpAmount) {
         if (amount == 0) revert YieldOptimizerErrors.ZeroAmount();
         uint256 halfAmount = amount / 2;
 
-        // Swap half USDC to WETH with slippage protection
-        stablecoin.approve(address(router), halfAmount);
+        tokenA.approve(address(router), halfAmount);
         IUniswapV3Router.ExactInputSingleParams memory params = IUniswapV3Router.ExactInputSingleParams({
-            tokenIn: address(stablecoin),
-            tokenOut: address(weth),
-            fee: 3000, // 0.3% fee
+            tokenIn: address(tokenA),
+            tokenOut: address(tokenB),
+            fee: 3000,
             recipient: address(this),
             deadline: block.timestamp + 300,
             amountIn: halfAmount,
-            amountOutMinimum: minAmountOut, // Use slippage protection
+            amountOutMinimum: minAmountOut,
             sqrtPriceLimitX96: 0
         });
-        uint256 wethAmount = router.exactInputSingle(params);
+        uint256 tokenBAmount = router.exactInputSingle(params);
 
-        // Simplified: Track LP amount as USDC equivalent
-        lpAmount = halfAmount + wethAmount; // Placeholder
+        lpAmount = halfAmount + tokenBAmount;
     }
 
     function withdrawFromUniswap(
         IUniswapV3Router router,
-        IERC20 stablecoin,
-        IERC20 weth,
+        IERC20WithDecimals tokenA, // Changed to IERC20WithDecimals (e.g., stablecoin from LP)
+        IERC20WithDecimals tokenB, // Changed to IERC20WithDecimals (e.g., weth from LP)
         uint256 lpAmount,
         address to,
-        uint256 minAmountOut // Add slippage protection parameter
+        uint256 minAmountOut
     ) internal {
         if (lpAmount == 0) revert YieldOptimizerErrors.ZeroAmount();
-        // Simplified: Assume LP amount is USDC equivalent, swap WETH back to USDC
-        uint256 wethAmount = lpAmount / 2;
-        
-        weth.approve(address(router), wethAmount);
+        uint256 tokenBAmount = lpAmount / 2;
+
+        tokenB.approve(address(router), tokenBAmount);
         IUniswapV3Router.ExactInputSingleParams memory params = IUniswapV3Router.ExactInputSingleParams({
-            tokenIn: address(weth), // Fixed: was wethAmount
-            tokenOut: address(stablecoin), // Fixed: was Stablecoin
+            tokenIn: address(tokenB),
+            tokenOut: address(tokenA),
             fee: 3000,
             recipient: to,
             deadline: block.timestamp + 300,
-            amountIn: wethAmount,
-            amountOutMinimum: minAmountOut, // Use slippage protection
+            amountIn: tokenBAmount,
+            amountOutMinimum: minAmountOut,
             sqrtPriceLimitX96: 0
         });
         router.exactInputSingle(params);
-        
-        // Transfer remaining stablecoin
-        stablecoin.transfer(to, lpAmount / 2);
+
+        tokenA.transfer(to, lpAmount / 2);
     }
 }

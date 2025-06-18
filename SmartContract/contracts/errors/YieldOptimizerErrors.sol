@@ -17,4 +17,8 @@ library YieldOptimizerErrors {
     error InvalidVRFRequest();
     error RebalanceFailed();
     error InsufficientContractBalance();
+    error UnsupportedDepositToken();
+    error RewardDrawNotReady();
+    error InsufficientParticipants();
+    error InsufficientRewardFunds();
 }
