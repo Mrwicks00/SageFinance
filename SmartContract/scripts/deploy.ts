@@ -17,7 +17,7 @@ async function main() {
   const aiAgent: string = "0xa4f7e9da12136de291aF8653395F926DA53496Fe"; // Your AI Agent address
   const aaveLendingPool: string = "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951"; // CORRECTED AAVE V3 Pool for Sepolia
   const compoundComet: string = "0xAec1F48e02Cfb822Be958B68C7957156EB3F0b6e"; // Compound V3 Comet USDC on Sepolia
-  const uniswapRouter: string = "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E"; // Uniswap V3 SwapRouter02 on Sepolia
+  const sageToken: string = "0xB451d2BE965c1B4d70066C79Ea945883bB04f084"; // Uniswap V3 SwapRouter02 on Sepolia
   const vrfCoordinator: string = "0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B"; // Chainlink VRF V2 Coordinator on Sepolia
   const vrfSubscriptionId: BigNumberish = "45637967718972486609456490017793923153518238960412990951905928516295505983196"; // Your VRF v2.5 Subscription ID (as string for large uint256)
   const keyHash: string = "0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae"; // Chainlink VRF Key Hash for Sepolia (500 Gwei)
@@ -37,11 +37,11 @@ async function main() {
     aiAgent,
     aaveLendingPool, // Using the corrected Aave address
     compoundComet,
-    uniswapRouter,
     vrfCoordinator,
     vrfSubscriptionId,
     keyHash,
-    initialCallbackGasLimit // <--- ADDED: The new parameter here
+    initialCallbackGasLimit,
+    sageToken // <--- ADDED: The new parameter here
   );
 
   // Wait for the contract to be deployed and confirmed
@@ -70,11 +70,11 @@ async function main() {
           aiAgent,
           aaveLendingPool,
           compoundComet,
-          uniswapRouter,
           vrfCoordinator,
           vrfSubscriptionId,
           keyHash,
-          initialCallbackGasLimit // <--- ADDED: The new parameter here for verification
+          initialCallbackGasLimit,
+          sageToken // <--- ADDED: The new parameter here for verification
         ],
       });
       console.log("Contract verified successfully!");

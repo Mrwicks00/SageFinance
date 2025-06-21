@@ -68,7 +68,8 @@ interface IYieldOptimizer {
         address _depositTokenAddress,
         uint256 strategyId,
         uint256 amount,
-        uint64 _chainSelector
+        uint64 _chainSelector,
+        address _forUser
     ) external;
 
     function withdraw(

@@ -37,7 +37,7 @@ async function main() {
   const compoundComet: string = "0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017"; // Compound V3 USDC Base Sepolia - NEEDS VERIFICATION
   
   // Uniswap V3 SwapRouter02 (Base Sepolia) - CONFIRMED
-  const uniswapRouter: string = "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4"; // Confirmed from Uniswap docs
+  const sageToken: string = "0xef0bb5612d0aebf0c8aeaef891b23feaa1df0887"; // Confirmed from Uniswap docs
   
   // Chainlink VRF V2.5 (Base Sepolia) - NEEDS VERIFICATION
   // Check: https://docs.chain.link/vrf/v2-5/supported-networks#base-sepolia
@@ -65,7 +65,7 @@ async function main() {
   console.log("WETH Token:", defaultWethAddress, "(✓ Confirmed)");
   console.log("AAVE Lending Pool:", aaveLendingPool);
   console.log("Compound Comet:", compoundComet);
-  console.log("Uniswap Router:", uniswapRouter, "(✓ Confirmed)");
+  console.log("Uniswap Router:", sageToken, "(✓ Confirmed)");
   console.log("VRF Coordinator:", vrfCoordinator);
   console.log("VRF Subscription ID:", vrfSubscriptionId);
   console.log("VRF Key Hash:", keyHash);
@@ -92,11 +92,11 @@ async function main() {
     aiAgent,
     aaveLendingPool,
     compoundComet,
-    uniswapRouter,
     vrfCoordinator,
     vrfSubscriptionId,
     keyHash,
-    initialCallbackGasLimit
+    initialCallbackGasLimit,
+    sageToken
   );
 
   // Wait for the contract to be deployed and confirmed
@@ -126,11 +126,11 @@ async function main() {
           aiAgent,
           aaveLendingPool,
           compoundComet,
-          uniswapRouter,
           vrfCoordinator,
           vrfSubscriptionId,
           keyHash,
-          initialCallbackGasLimit
+          initialCallbackGasLimit,
+          sageToken
         ],
       });
       console.log("Contract verified successfully!");

@@ -254,60 +254,67 @@ contract YieldOptimizer is ReentrancyGuard, Pausable, VRFConsumerBaseV2Plus {
      * @param amount The amount of token to deposit.
      * @param _chainSelector The chain selector of the chain this interaction originated from (for gamification).
      */
-    function deposit(
-        address _depositTokenAddress,
-        uint256 strategyId,
-        uint256 amount,
-        uint64 _chainSelector // NEW: For multi-chain tracking
-    ) external nonReentrant whenNotPaused {
-        if (_depositInProgress[msg.sender])
-            revert YieldOptimizerErrors.OperationInProgress();
-        _depositInProgress[msg.sender] = true;
+function deposit(
+    address _depositTokenAddress,
+    uint256 strategyId,
+    uint256 amount,
+    uint64 _chainSelector,
+    address _forUser // <--- NEW PARAMETER HERE
+) external nonReentrant whenNotPaused {
+    // IMPORTANT: msg.sender here will be the CrossChainManager.
+    // We use _forUser to attribute the deposit to the actual end-user.
 
-        if (amount == 0) revert YieldOptimizerErrors.ZeroAmount();
-        // Updated strategyId check since Uniswap (ID 2) is removed
-        if (strategyId > 1 || !strategies[strategyId].active)
-            revert YieldOptimizerErrors.InvalidStrategy();
-        if (!supportedStrategyDepositTokens[strategyId][_depositTokenAddress])
-            revert YieldOptimizerErrors.UnsupportedDepositToken(); 
+    if (_depositInProgress[_forUser]) // Use _forUser for operation flags
+        revert YieldOptimizerErrors.OperationInProgress();
+    _depositInProgress[_forUser] = true; // Use _forUser for operation flags
 
-        IERC20WithDecimals tokenToDeposit = IERC20WithDecimals(_depositTokenAddress);
+    if (amount == 0) revert YieldOptimizerErrors.ZeroAmount();
+    if (strategyId > 1 || !strategies[strategyId].active)
+        revert YieldOptimizerErrors.InvalidStrategy();
+    if (!supportedStrategyDepositTokens[strategyId][_depositTokenAddress])
+        revert YieldOptimizerErrors.UnsupportedDepositToken(); 
 
-        tokenToDeposit.safeTransferFrom(msg.sender, address(this), amount);
+    IERC20WithDecimals tokenToDeposit = IERC20WithDecimals(_depositTokenAddress);
 
-        if (strategyId == 0) { // Aave
-            AaveIntegration.depositToAave(
-                aaveLendingPool,
-                tokenToDeposit,
-                amount,
-                address(this)
-            );
-        } else if (strategyId == 1) { // Compound
-            CompoundIntegration.depositToCompound(
-                compoundComet,
-                tokenToDeposit,
-                amount
-            );
-        }
-        // REMOVED: else if (strategyId == 2) { ... Uniswap logic ... }
+    // The tokens are assumed to be in THIS YieldOptimizer contract's balance
+    // or approved for transfer FROM the CrossChainManager (which is msg.sender here).
+    // The CrossChainManager would have received them via CCIP.
+    // So, we need to transfer from the CrossChainManager (msg.sender) to this YieldOptimizer contract.
+    tokenToDeposit.safeTransferFrom(msg.sender, address(this), amount);
 
-        _addUserPosition(
-            msg.sender,
-            YieldOptimizerStructs.UserPosition({
-                strategyId: strategyId,
-                balance: amount,
-                lastUpdated: block.timestamp,
-                lastRebalanced: block.timestamp
-            })
+
+    if (strategyId == 0) { // Aave
+        AaveIntegration.depositToAave(
+            aaveLendingPool,
+            tokenToDeposit,
+            amount,
+            address(this) // Aave deposit goes to this contract (YieldOptimizer)
         );
-
-        _depositInProgress[msg.sender] = false;
-
-        // NEW: Track user interaction for gamification
-        _trackUserInteraction(msg.sender, _chainSelector, 0); // 0 for deposit
-
-        emit YieldOptimizerEvents.Deposited(msg.sender, strategyId, amount);
+    } else if (strategyId == 1) { // Compound
+        CompoundIntegration.depositToCompound(
+            compoundComet,
+            tokenToDeposit,
+            amount
+        );
     }
+
+    _addUserPosition(
+        _forUser, // <--- USE THE NEW _forUser PARAMETER HERE
+        YieldOptimizerStructs.UserPosition({
+            strategyId: strategyId,
+            balance: amount,
+            lastUpdated: block.timestamp,
+            lastRebalanced: block.timestamp
+        })
+    );
+
+    _depositInProgress[_forUser] = false; // Use _forUser for operation flags
+
+    // Track user interaction for gamification
+    _trackUserInteraction(_forUser, _chainSelector, 0); // <--- USE THE NEW _forUser PARAMETER HERE
+
+    emit YieldOptimizerEvents.Deposited(_forUser, strategyId, amount); // <--- USE THE NEW _forUser PARAMETER HERE
+}
 
     // REMOVED: function depositRandom(...) and its internal logic
 

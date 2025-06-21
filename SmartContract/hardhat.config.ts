@@ -4,6 +4,7 @@ require("dotenv").config();
 
 const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY; 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const PRIVATE_KEY_2 = process.env.SECOND_KEY;
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY; 
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY; // Add this to your .env file
 
@@ -29,7 +30,10 @@ const config: HardhatUserConfig = {
   networks: {
     sepolia: {
       url: `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, // Or Infura URL
-      accounts: [`0x${PRIVATE_KEY}`],
+      accounts: [
+        `0x${PRIVATE_KEY}`,   // Your first account
+        `0x${PRIVATE_KEY_2}`  // <--- Your second account
+      ],
       gasPrice: 20000000000, // 20 Gwei (adjust as needed, 20 is often good for testnets)
     },
     "base-sepolia": {

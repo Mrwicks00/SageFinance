@@ -33,7 +33,7 @@ async function main() {
   const compoundComet: string = "0xa4f7e9da12136de291aF8653395F926DA53496Fe"; // NOT DEPLOYED - PLACEHOLDER
   
   // Uniswap V3 SwapRouter02 (Arbitrum Sepolia)
-  const uniswapRouter: string = "0x101F443B4d1b059569D643917553c771E1b9663E"; // SwapRouter02 Arbitrum Sepolia
+  const sageToken: string = "0x5f75b9bd6b90be2a924a23a3a3a81030b9040bc3"; // SwapRouter02 Arbitrum Sepolia
   
   // Chainlink VRF V2.5 (Arbitrum Sepolia)
   const vrfCoordinator: string = "0x5CE8D5A2BC84beb22a398CCA51996F7930313D61"; // VRF V2.5 Coordinator Arbitrum Sepolia
@@ -62,7 +62,7 @@ async function main() {
   console.log("WETH Token:", defaultWethAddress, "(✓ Verified)");
   console.log("AAVE Lending Pool:", aaveLendingPool, "(✓ Verified)");
   console.log("Compound Comet:", compoundComet, "(⚠️  NOT DEPLOYED - WILL FAIL)");
-  console.log("Uniswap Router:", uniswapRouter, "(✓ Verified)");
+  console.log("Sage Token:", sageToken, "(✓ Verified)");
   console.log("VRF Coordinator:", vrfCoordinator, "(✓ Verified)");
   console.log("VRF Subscription ID:", vrfSubscriptionId, "(⚠️  UPDATE REQUIRED)");
   console.log("VRF Key Hash:", keyHash, "(✓ Verified)");
@@ -99,12 +99,12 @@ async function main() {
     defaultWethAddress,
     aiAgent,
     aaveLendingPool,
-    compoundComet, // This will be zero address - may cause issues
-    uniswapRouter,
+    compoundComet,
     vrfCoordinator,
     vrfSubscriptionId,
     keyHash,
-    initialCallbackGasLimit
+    initialCallbackGasLimit,
+    sageToken
   );
 
   // Wait for the contract to be deployed and confirmed
@@ -131,11 +131,11 @@ async function main() {
           aiAgent,
           aaveLendingPool,
           compoundComet,
-          uniswapRouter,
           vrfCoordinator,
           vrfSubscriptionId,
           keyHash,
-          initialCallbackGasLimit
+          initialCallbackGasLimit,
+          sageToken
         ],
       });
       console.log("Contract verified successfully!");
