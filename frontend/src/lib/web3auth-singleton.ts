@@ -1,49 +1,133 @@
-import { web3auth, configureWeb3AuthAdapter } from "@/config/web3auth.config"
+// lib/web3auth-singleton.ts
+import { Web3Auth } from "@web3auth/modal"
+import { OpenloginAdapter } from "@web3auth/openlogin-adapter"
+import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from "@web3auth/base"
+import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider"
+
+const clientId = process.env.NEXT_PUBLIC_WEB3AUTH_CLIENT_ID || "your-client-id"
 
 class Web3AuthSingleton {
-  private initialized = false
-  private initPromise: Promise<void> | null = null
+  private _instance: Web3Auth | null = null
+  private _isInitialized = false
 
-  async init() {
-    if (this.initialized) {
-      return
+  get instance(): Web3Auth {
+    if (!this._instance) {
+      throw new Error("Web3Auth not initialized. Call init() first.")
     }
-    
-    if (this.initPromise) {
-      return this.initPromise
-    }
-
-    this.initPromise = this.doInit()
-    return this.initPromise
+    return this._instance
   }
 
-  private async doInit() {
-    // Only initialize on client side
-    if (typeof window === 'undefined') {
-      throw new Error('Web3Auth can only be initialized on the client side')
-    }
+  get isInitialized(): boolean {
+    return this._isInitialized
+  }
+
+  async init(): Promise<void> {
+    if (this._isInitialized) return
 
     try {
-      // Configure adapter before initializing
-      configureWeb3AuthAdapter()
-      
+      // Configure the private key provider
+      const privateKeyProvider = new EthereumPrivateKeyProvider({
+        config: {
+          chainConfig: {
+            chainNamespace: CHAIN_NAMESPACES.EIP155,
+            chainId: "0x1", // Ethereum Mainnet
+            rpcTarget: "https://rpc.ankr.com/eth",
+            displayName: "Ethereum Mainnet",
+            blockExplorer: "https://etherscan.io/",
+            ticker: "ETH",
+            tickerName: "Ethereum",
+          },
+        },
+      })
+
       // Initialize Web3Auth
-      await web3auth.init()
-      this.initialized = true
+      this._instance = new Web3Auth({
+        clientId,
+        web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET, // or TESTNET for development
+        privateKeyProvider,
+        uiConfig: {
+          appName: "Your App Name",
+          mode: "dark", // or "light"
+          logoLight: "https://your-logo-url.com/logo-light.svg",
+          logoDark: "https://your-logo-url.com/logo-dark.svg",
+          defaultLanguage: "en",
+          loginGridCol: 3,
+          primaryButton: "externalLogin",
+        },
+      })
+
+      // Configure and add the OpenLogin adapter
+      const openloginAdapter = new OpenloginAdapter({
+        privateKeyProvider,
+        adapterSettings: {
+          loginConfig: {
+            google: {
+              verifier: "your-google-verifier", // You need to create this in Web3Auth dashboard
+              typeOfLogin: "google",
+              clientId: "your-google-oauth-client-id", // Google OAuth client ID
+            },
+            // Add other login providers as needed
+            facebook: {
+              verifier: "your-facebook-verifier",
+              typeOfLogin: "facebook",
+              clientId: "your-facebook-app-id",
+            },
+            twitter: {
+              verifier: "your-twitter-verifier",
+              typeOfLogin: "twitter",
+              clientId: "your-twitter-client-id",
+            },
+          },
+          whiteLabel: {
+            appName: "Your App Name",
+            logoLight: "https://your-logo-url.com/logo-light.svg",
+            logoDark: "https://your-logo-url.com/logo-dark.svg",
+            defaultLanguage: "en",
+            mode: "dark",
+          },
+        },
+      })
+
+      // Add the adapter to Web3Auth instance
+      this._instance.configureAdapter(openloginAdapter)
+
+      // Initialize the Web3Auth instance
+      await this._instance.init()
+      this._isInitialized = true
+
       console.log("Web3Auth initialized successfully")
     } catch (error) {
       console.error("Web3Auth initialization failed:", error)
-      this.initPromise = null // Reset on failure
       throw error
     }
   }
 
-  get instance() {
-    return web3auth
+  async connect(loginProvider: string = "google"): Promise<any> {
+    if (!this._instance) {
+      throw new Error("Web3Auth not initialized")
+    }
+
+    try {
+      const web3authProvider = await this._instance.connectTo("openlogin", {
+        loginProvider,
+      })
+      return web3authProvider
+    } catch (error) {
+      console.error("Web3Auth connection failed:", error)
+      throw error
+    }
   }
 
-  get isInitialized() {
-    return this.initialized
+  async disconnect(): Promise<void> {
+    if (!this._instance) return
+
+    try {
+      await this._instance.logout()
+      console.log("Web3Auth disconnected successfully")
+    } catch (error) {
+      console.error("Web3Auth disconnection failed:", error)
+      throw error
+    }
   }
 }
 

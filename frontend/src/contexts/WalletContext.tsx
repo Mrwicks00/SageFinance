@@ -12,10 +12,12 @@ interface WalletContextType {
   balance?: string
   isWrongNetwork: boolean
   isWeb3AuthConnected: boolean
-  connectWeb3Auth: () => Promise<void>
+  isWeb3AuthInitialized: boolean
+  connectWeb3Auth: (loginProvider?: string) => Promise<void>
   disconnectWeb3Auth: () => Promise<void>
   switchToSupportedNetwork: () => Promise<void>
   holdings: TokenHolding[]
+  error: string | null
 }
 
 interface TokenHolding {
@@ -33,8 +35,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const { switchChain } = useSwitchChain()
 
   const [isWeb3AuthConnected, setIsWeb3AuthConnected] = useState(false)
+  const [isWeb3AuthInitialized, setIsWeb3AuthInitialized] = useState(false)
   const [holdings, setHoldings] = useState<TokenHolding[]>([])
   const [isInitializing, setIsInitializing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const isWrongNetwork = chainId ? !SUPPORTED_NETWORKS.some((network) => network.id === chainId) : false
 
@@ -59,48 +63,69 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const initWeb3Auth = async () => {
     if (isInitializing || web3AuthSingleton.isInitialized) {
+      setIsWeb3AuthInitialized(web3AuthSingleton.isInitialized)
       return
     }
 
     setIsInitializing(true)
+    setError(null)
+    
     try {
       await web3AuthSingleton.init()
+      setIsWeb3AuthInitialized(true)
       setIsWeb3AuthConnected(web3AuthSingleton.instance.connected)
+      console.log("Web3Auth initialized successfully")
     } catch (error) {
       console.error("Web3Auth initialization failed:", error)
+      setError(error instanceof Error ? error.message : "Failed to initialize Web3Auth")
+      setIsWeb3AuthInitialized(false)
     } finally {
       setIsInitializing(false)
     }
   }
 
-  const connectWeb3Auth = async () => {
+  const connectWeb3Auth = async (loginProvider: string = "google") => {
+    if (!isWeb3AuthInitialized) {
+      setError("Web3Auth is not initialized. Please wait for initialization to complete.")
+      return
+    }
+
+    setError(null)
+    
     try {
-      const web3authProvider = await web3AuthSingleton.instance.connectTo("openlogin", {
-        loginProvider: "google",
-      })
+      const web3authProvider = await web3AuthSingleton.connect(loginProvider)
       if (web3authProvider) {
         setIsWeb3AuthConnected(true)
+        console.log("Web3Auth connected successfully")
       }
     } catch (error) {
       console.error("Web3Auth connection failed:", error)
+      setError(error instanceof Error ? error.message : "Failed to connect with Web3Auth")
     }
   }
 
   const disconnectWeb3Auth = async () => {
+    setError(null)
+    
     try {
-      await web3AuthSingleton.instance.logout()
+      await web3AuthSingleton.disconnect()
       setIsWeb3AuthConnected(false)
+      console.log("Web3Auth disconnected successfully")
     } catch (error) {
       console.error("Web3Auth disconnection failed:", error)
+      setError(error instanceof Error ? error.message : "Failed to disconnect Web3Auth")
     }
   }
 
   const switchToSupportedNetwork = async () => {
     if (switchChain) {
+      setError(null)
+      
       try {
         await switchChain({ chainId: SUPPORTED_NETWORKS[0].id })
       } catch (error) {
         console.error("Network switch failed:", error)
+        setError(error instanceof Error ? error.message : "Failed to switch network")
       }
     }
   }
@@ -112,10 +137,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     balance: balance?.formatted,
     isWrongNetwork,
     isWeb3AuthConnected,
+    isWeb3AuthInitialized,
     connectWeb3Auth,
     disconnectWeb3Auth,
     switchToSupportedNetwork,
     holdings,
+    error,
   }
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>
