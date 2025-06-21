@@ -1,8 +1,8 @@
 import { ethers } from "hardhat";
 import { Signer } from "ethers";
 import {
-    CROSS_CHAIN_MANAGER_CONTRACT_ADDRESS,
-    BASE_SEPOLIA_CHAIN_SELECTOR,
+    BASE_CROSS_CHAIN,
+    ARB_SEPOLIA_CHAIN_SELECTOR,
     USDC_TOKEN_ADDRESS_CCIP,
     getCrossChainManagerContract,
     getTokenContract
@@ -22,7 +22,7 @@ async function main() {
 
     // --- Configuration for the transfer ---
     const AMOUNT_TO_TRANSFER = ethers.parseUnits("1.5", usdcDecimals); // Changed to 1.5 USDC
-    const DESTINATION_CHAIN_SELECTOR = BASE_SEPOLIA_CHAIN_SELECTOR;
+    const DESTINATION_CHAIN_SELECTOR = ARB_SEPOLIA_CHAIN_SELECTOR;
     const RECEIVER_ADDRESS_ON_DESTINATION = userAddress; // The user's address on the destination chain
 
     try {
@@ -44,8 +44,8 @@ async function main() {
         console.log(`Required CCIP Transfer Fee: ${ethers.formatEther(fee)} ETH`);
 
         // 2. Approve the CrossChainManager to spend your USDC
-        console.log(`\nApproving CrossChainManager (${CROSS_CHAIN_MANAGER_CONTRACT_ADDRESS}) to spend ${ethers.formatUnits(AMOUNT_TO_TRANSFER, usdcDecimals)} ${usdcSymbol}...`);
-        const approveTx = await usdcToken.approve(CROSS_CHAIN_MANAGER_CONTRACT_ADDRESS, AMOUNT_TO_TRANSFER);
+        console.log(`\nApproving CrossChainManager (${BASE_CROSS_CHAIN}) to spend ${ethers.formatUnits(AMOUNT_TO_TRANSFER, usdcDecimals)} ${usdcSymbol}...`);
+        const approveTx = await usdcToken.approve(BASE_CROSS_CHAIN, AMOUNT_TO_TRANSFER);
         console.log(`Approval Transaction sent: ${approveTx.hash}`);
         await approveTx.wait();
         console.log("Approval successful!");

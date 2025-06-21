@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 import { Signer, Contract } from "ethers";
 
 // --- GLOBAL CONFIGURATION ---
-const YIELD_OPTIMIZER_CONTRACT_ADDRESS = "0x543aeA3ad17fE0a4cfc8546f958d15BB2828e68B"; // Your deployed contract
+const YIELD_OPTIMIZER_CONTRACT_ADDRESS = "0x18F645aAAA77722d8644d9a35b21F1999A3fdEf8"; // Your deployed contract
 const SEPOLIA_CHAIN_SELECTOR = 11155111; // Chainlink Chain Selector for Sepolia
 
 // --- CORRECTED TOKEN ADDRESSES (Sepolia) ---
@@ -11,9 +11,11 @@ const LINK_TOKEN_ADDRESS = "0xf8Fb3713D459D7C1018BD0A49D19b4C44290EBE5"; // LINK
 
 // --- NEW CCIP-Related Constants ---
 export const CROSS_CHAIN_MANAGER_CONTRACT_ADDRESS = "0xa4e8a4E9C84D9b8B02095AeE9d4f163744A4d734"; // Sepolia CrossChainManager address
+export const BASE_CROSS_CHAIN = "0x79661a34488f91a50Ff99027B905a87E72c7291A"
 export const BASE_SEPOLIA_CHAIN_SELECTOR = "10344971235874465080"; // Chainlink Chain Selector for Base Sepolia
+export const ARB_SEPOLIA_CHAIN_SELECTOR = "3478487238524512106"
 export const SEPOLIA_CHAIN_SELECTOR2 = "16015286601757825753"; // Chainlink Chain Selector for Sepolia
-export const USDC_TOKEN_ADDRESS_CCIP = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"; // USDC on Sepolia (CCIP-enabled)
+export const USDC_TOKEN_ADDRESS_CCIP = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC on Sepolia (CCIP-enabled)
 
 
 // --- STRATEGY IDs ---
@@ -118,7 +120,7 @@ async function getYieldOptimizerContract(signer: Signer): Promise<Contract> {
 
 export async function getCrossChainManagerContract(signer: Signer) {
     const CrossChainManager = await ethers.getContractFactory("CrossChainManager");
-    return CrossChainManager.attach(CROSS_CHAIN_MANAGER_CONTRACT_ADDRESS).connect(signer);
+    return CrossChainManager.attach(BASE_CROSS_CHAIN).connect(signer);
 }
 
 // Helper function to get token contract instance
