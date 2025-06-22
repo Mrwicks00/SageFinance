@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, useCallback, useMemo ,type ReactNode } from "react"
 import { useAccount, useBalance, useChainId, useSwitchChain } from "wagmi"
 import { web3AuthSingleton } from "@/lib/web3auth-singleton"
 import { SUPPORTED_NETWORKS } from "@/constants/networks"
@@ -40,7 +40,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isInitializing, setIsInitializing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const isWrongNetwork = chainId ? !SUPPORTED_NETWORKS.some((network) => network.id === chainId) : false
+  // Enhanced wrong network detection with debugging
+  const isWrongNetwork = useMemo(() => {
+    const supportedChainIds = SUPPORTED_NETWORKS.map(network => network.id)
+    const wrongNetwork = chainId ? !supportedChainIds.includes(chainId) : false
+    
+    // Debug logging
+    console.log("🔍 Network Debug Info:", {
+      currentChainId: chainId,
+      supportedChainIds,
+      isWrongNetwork: wrongNetwork,
+      isConnected,
+      address: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : null
+    })
+    
+    return wrongNetwork
+  }, [chainId, isConnected])
 
   const fetchHoldings = useCallback(async () => {
     const mockHoldings: TokenHolding[] = [
@@ -118,15 +133,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }
 
   const switchToSupportedNetwork = async () => {
+    console.log("🔄 Attempting to switch network to:", SUPPORTED_NETWORKS[0])
+    
     if (switchChain) {
       setError(null)
       
       try {
         await switchChain({ chainId: SUPPORTED_NETWORKS[0].id })
+        console.log("✅ Network switch successful to:", SUPPORTED_NETWORKS[0].id)
       } catch (error) {
-        console.error("Network switch failed:", error)
+        console.error("❌ Network switch failed:", error)
         setError(error instanceof Error ? error.message : "Failed to switch network")
       }
+    } else {
+      console.error("❌ switchChain function not available")
+      setError("Network switching not available")
     }
   }
 

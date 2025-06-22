@@ -27,7 +27,10 @@ export function WalletButton() {
           {isWrongNetwork ? "Wrong Network" : formatAddress(address)}
           <ChevronDown className="w-4 h-4 ml-2" />
         </Button>
-        <WalletInfo isOpen={showInfoModal} onClose={() => setShowInfoModal(false)} />
+        {/* Only render WalletInfo when showInfoModal is true */}
+        {showInfoModal && (
+          <WalletInfo isOpen={showInfoModal} onClose={() => setShowInfoModal(false)} />
+        )}
       </>
     )
   }
@@ -35,7 +38,10 @@ export function WalletButton() {
   return (
     <>
       <Button onClick={() => setShowConnectModal(true)}>Connect Wallet</Button>
-      <WalletModal isOpen={showConnectModal} onClose={() => setShowConnectModal(false)} />
+      {/* Only render WalletModal when showConnectModal is true */}
+      {showConnectModal && (
+        <WalletModal isOpen={showConnectModal} onClose={() => setShowConnectModal(false)} />
+      )}
     </>
   )
 }

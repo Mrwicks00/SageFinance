@@ -34,6 +34,9 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
   const { walletData, loading, error, refetch } = useWalletData(address, chainId)
   const [copied, setCopied] = useState(false)
 
+  // Add this early return to prevent rendering when not open
+  if (!isOpen) return null;
+
   const handleDisconnect = () => {
     disconnect()
     if (isWeb3AuthConnected) {
@@ -79,20 +82,15 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
   return (
     <>
       {/* Backdrop */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-60 transition-opacity duration-300"
-          style={{ zIndex: 9998 }}
-          onClick={onClose}
-        />
-      )}
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-60 transition-opacity duration-300"
+        style={{ zIndex: 9998 }}
+        onClick={onClose}
+      />
       
       {/* Slide-in Panel */}
       <div 
-        className={`
-          fixed top-0 right-0 h-screen w-96 bg-gray-900 shadow-2xl transform transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : 'translate-x-full'}
-        `}
+        className="fixed top-0 right-0 h-screen w-96 bg-gray-900 shadow-2xl transform transition-transform duration-300 ease-in-out translate-x-0"
         style={{ zIndex: 9999 }}
       >
         <div className="h-full overflow-y-auto">
