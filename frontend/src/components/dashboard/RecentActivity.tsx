@@ -1,6 +1,6 @@
 "use client";
 
-import { mockTransactions } from "@/data/mockData";
+import { mockTransactions } from "../../data/mockData";
 import { 
   Clock, 
   ArrowDown, 

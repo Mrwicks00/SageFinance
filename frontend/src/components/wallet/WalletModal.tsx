@@ -1,9 +1,9 @@
 "use client"
 import { useConnect } from "wagmi"
 import { Connector } from "wagmi"
-import { Modal } from "@/components/ui/Modal"
-import { Button } from "@/components/ui/Button"
-import { useWallet } from "@/contexts/WalletContext"
+import { Modal } from "../../components/ui/Modal"
+import { Button } from "../../components/ui/Button"
+import { useWallet } from "../../contexts/WalletContext"
 import Image from "next/image"
 
 interface WalletModalProps {

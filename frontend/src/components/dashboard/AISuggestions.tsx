@@ -1,6 +1,6 @@
 "use client";
 
-import { mockAISuggestions } from "@/data/mockData";
+import { mockAISuggestions } from "../../data/mockData";
 import { 
   Brain, 
   TrendingUp, 

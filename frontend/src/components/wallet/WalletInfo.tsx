@@ -11,9 +11,9 @@ import {
   DollarSign,
   X
 } from "lucide-react";
-import { useWallet } from "@/contexts/WalletContext"
-import { useWalletData } from "@/hooks/useWalletData"
-import { NETWORK_CONFIGS, getChainById } from "@/constants/networks"
+import { useWallet } from "../../contexts/WalletContext"
+import { useWalletData } from "../../hooks/useWalletData"
+import { NETWORK_CONFIGS, getChainById } from "../../constants/networks"
 
 interface WalletInfoProps {
   isOpen: boolean;

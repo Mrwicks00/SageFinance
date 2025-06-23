@@ -1,6 +1,6 @@
-import { Card, CardContent, CardHeader } from "@/components/ui/Card"
-import { Button } from "@/components/ui/Button"
-import { STAKING_FEATURES, WEEKLY_REWARDS } from "@/data/staking"
+import { Card, CardContent, CardHeader } from "../../components/ui/Card"
+import { Button } from "../../components/ui/Button"
+import { STAKING_FEATURES, WEEKLY_REWARDS } from "../../data/staking"
 import { Coins, Gift, Zap } from "lucide-react"
 
 export function StakingSection() {
