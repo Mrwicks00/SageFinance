@@ -48,7 +48,9 @@ export function Header() {
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center space-x-4">
             <WalletButton />
+            <Link href="/dashboard">
             <Button>Launch App</Button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
