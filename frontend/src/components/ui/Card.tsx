@@ -1,7 +1,7 @@
 import type React from "react"
-import { cn } from "@/lib/utils"
+import { cn } from "../../lib/utils"
 
-interface CardProps {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode
   className?: string
   glassmorphism?: boolean

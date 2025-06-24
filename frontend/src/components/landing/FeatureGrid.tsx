@@ -1,5 +1,5 @@
-import { Card, CardContent } from "@/components/ui/Card"
-import { FEATURES } from "@/data/features"
+import { Card, CardContent } from "../../components/ui/Card"
+import { FEATURES } from "../../data/features"
 
 export function FeatureGrid() {
   return (

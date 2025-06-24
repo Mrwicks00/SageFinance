@@ -28,13 +28,13 @@ const NAVIGATION_ITEMS = [
   },
   {
     label: "AI Assistant",
-    href: "/dashboard/ai-chat",
+    href: "/aichat",
     icon: MessageSquare,
     description: "Best yield finder",
   },
   {
     label: "Staking",
-    href: "/dashboard/staking",
+    href: "/staking",
     icon: Coins,
     description: "Stake SAGE tokens",
   },

@@ -1,11 +1,11 @@
 "use client";
 
-import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
-import { PortfolioOverview } from "@/components/dashboard/PortfolioOverview";
-import { QuickActions } from "@/components/dashboard/QuickActions";
-import { RecentActivity } from "@/components/dashboard/RecentActivity";
-import { AISuggestions } from "@/components/dashboard/AISuggestions";
+import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
+import { DashboardSidebar } from "../../components/dashboard/DashboardSidebar";
+import { PortfolioOverview } from "../../components/dashboard/PortfolioOverview";
+import { QuickActions } from "../../components/dashboard/QuickActions";
+import { RecentActivity } from "../../components/dashboard/RecentActivity";
+import { AISuggestions } from "../../components/dashboard/AISuggestions";
 
 export default function DashboardPage() {
   return (

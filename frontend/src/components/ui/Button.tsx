@@ -1,9 +1,9 @@
 import type React from "react"
-import { cn } from "@/lib/utils"
+import { cn } from "../../lib/utils"
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "outline" | "ghost"
-  size?: "sm" | "md" | "lg"
+  size?: "sm" | "md" | "lg" | "icon"
   children: React.ReactNode
 }
 
@@ -22,6 +22,7 @@ export function Button({ variant = "primary", size = "md", className, children, 
     sm: "px-3 py-1.5 text-sm",
     md: "px-4 py-2 text-base",
     lg: "px-6 py-3 text-lg",
+    icon: "h-10 w-10 p-0", // Square button for icons
   }
 
   return (
