@@ -4,7 +4,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { Web3Provider } from "@/providers/Web3Provider"
+import { Web3Provider } from "../providers/Web3Provider"
 // --- ADD THESE TWO IMPORTS ---
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';

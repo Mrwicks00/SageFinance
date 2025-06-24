@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/Button";
-import { WalletButton } from "@/components/wallet/WalletButton";
+import { Button } from "../../components/ui/Button";
+import { WalletButton } from "../../components/wallet/WalletButton";
 import { Menu, X } from "lucide-react";
 
 const NAVIGATION_ITEMS = [

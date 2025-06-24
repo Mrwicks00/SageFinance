@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { WalletButton } from "@/components/wallet/WalletButton";
+import { WalletButton } from "../../components/wallet/WalletButton";
 import { Menu, X, Bell, Settings } from "lucide-react";
 
 const NETWORK_OPTIONS = [

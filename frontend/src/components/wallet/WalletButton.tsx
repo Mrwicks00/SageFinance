@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/Button"
+import { Button } from "../../components/ui/Button"
 import { WalletModal } from "./WalletModal"
 import { WalletInfo } from "./WalletInfo"
-import { useWallet } from "@/contexts/WalletContext"
+import { useWallet } from "../../contexts/WalletContext"
 import { ChevronDown } from "lucide-react"
 
 export function WalletButton() {

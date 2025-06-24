@@ -1,6 +1,6 @@
 "use client";
 
-import { mockPortfolio } from "@/data/mockData";
+import { mockPortfolio } from "../../data/mockData";
 import { TrendingUp, TrendingDown, DollarSign, PieChart } from "lucide-react";
 
 export function PortfolioOverview() {
