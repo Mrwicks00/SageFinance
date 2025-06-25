@@ -1,9 +1,10 @@
 // src/integrations/erc20/hooks.ts
+
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { Address, erc20Abi, parseUnits } from 'viem';
-import { ERC20_ABI } from './constants';
-import { YIELD_OPTIMIZER_ADDRESSES } from '@/integrations/yieldOptimizer/constants';
+import { Address, erc20Abi } from 'viem'; // Removed maxUint256 import
 import { useMemo, useCallback } from 'react';
+
+export const ERC20_ABI = erc20Abi;
 
 // Hook to get an ERC-20 token's balance for the connected user
 export function useErc20Balance(tokenAddress?: Address) {
@@ -15,8 +16,8 @@ export function useErc20Balance(tokenAddress?: Address) {
     functionName: 'balanceOf',
     args: [address as Address],
     query: {
-      enabled: !!address && !!tokenAddress, // Only enable query if address and tokenAddress exist
-      refetchInterval: 5000, // Refetch balance every 5 seconds
+      enabled: !!address && !!tokenAddress,
+      refetchInterval: 5000,
     },
   });
 
@@ -36,7 +37,7 @@ export function useErc20Decimals(tokenAddress?: Address) {
     functionName: 'decimals',
     query: {
       enabled: !!tokenAddress,
-      staleTime: Infinity, // Decimals don't change
+      staleTime: Infinity,
     },
   });
 
@@ -47,19 +48,18 @@ export function useErc20Decimals(tokenAddress?: Address) {
   };
 }
 
-// Hook to get the allowance granted by the user to the YieldOptimizer contract for a specific token
-export function useErc20Allowance(tokenAddress?: Address, chainId?: number) {
+// Hook to get the allowance granted by the user to a specified spender contract for a specific token
+export function useErc20Allowance(tokenAddress?: Address, spenderAddress?: Address) {
   const { address } = useAccount();
-  const yieldOptimizerAddress = chainId ? YIELD_OPTIMIZER_ADDRESSES[chainId] : undefined;
 
   const { data: allowance, isLoading, refetch, error } = useReadContract({
     address: tokenAddress,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: [address as Address, yieldOptimizerAddress as Address],
+    args: [address as Address, spenderAddress as Address],
     query: {
-      enabled: !!address && !!tokenAddress && !!yieldOptimizerAddress,
-      refetchInterval: 5000, // Refetch allowance every 5 seconds
+      enabled: !!address && !!tokenAddress && !!spenderAddress,
+      refetchInterval: 5000,
     },
   });
 
@@ -71,11 +71,9 @@ export function useErc20Allowance(tokenAddress?: Address, chainId?: number) {
   };
 }
 
-// Hook to approve the YieldOptimizer contract to spend a certain amount of an ERC-20 token
-export function useApproveErc20(tokenAddress?: Address, amountToApprove?: bigint) {
-  const { chainId } = useAccount();
-  const yieldOptimizerAddress = chainId ? YIELD_OPTIMIZER_ADDRESSES[chainId] : undefined;
-
+// Hook to approve a specified spender contract to spend a specific amount of an ERC-20 token.
+// This now takes `amountToApprove` as an argument.
+export function useApproveErc20(tokenAddress?: Address, spenderAddress?: Address, amountToApprove?: bigint) {
   const {
     data: hash,
     isPending: isApproveLoading,
@@ -95,15 +93,16 @@ export function useApproveErc20(tokenAddress?: Address, amountToApprove?: bigint
   });
 
   const write = useCallback(() => {
-    if (tokenAddress && yieldOptimizerAddress && amountToApprove !== undefined) {
+    if (tokenAddress && spenderAddress && amountToApprove !== undefined) {
+      // Approve the specific amount
       approve({
         address: tokenAddress,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [yieldOptimizerAddress, amountToApprove],
+        args: [spenderAddress, amountToApprove],
       });
     }
-  }, [tokenAddress, yieldOptimizerAddress, amountToApprove, approve]);
+  }, [tokenAddress, spenderAddress, amountToApprove, approve]); // Added amountToApprove to dependencies
 
   const error = useMemo(() => approveError || approveConfirmError, [approveError, approveConfirmError]);
 
