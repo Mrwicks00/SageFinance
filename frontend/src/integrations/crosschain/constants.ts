@@ -38,3 +38,66 @@ export const CHAINLINK_CHAIN_SELECTORS_MAP: Record<number, bigint> = {
 // Default strategy ID for auto-deposit. This should match a strategy ID in your YieldOptimizer contract.
 // Assuming your YieldOptimizer's Compound strategy is ID 1 (as per previous context).
 export const DEFAULT_YIELD_OPTIMIZER_STRATEGY_ID = 1;
+
+// Helper function to validate chain selector
+export function validateChainSelector(chainId: number): boolean {
+  return chainId in CHAINLINK_CHAIN_SELECTORS_MAP;
+}
+
+// Helper function to get supported chain pairs
+export function getSupportedChainPairs(): Array<{source: number, destination: number}> {
+  const chainIds = Object.keys(CHAINLINK_CHAIN_SELECTORS_MAP).map(Number);
+  const pairs: Array<{source: number, destination: number}> = [];
+  
+  for (const source of chainIds) {
+    for (const destination of chainIds) {
+      if (source !== destination) {
+        pairs.push({ source, destination });
+      }
+    }
+  }
+  
+  return pairs;
+}
+
+// Helper function to validate if a route is supported
+export function isRouteSupported(sourceChainId: number, destinationChainId: number): boolean {
+  return validateChainSelector(sourceChainId) && 
+         validateChainSelector(destinationChainId) && 
+         sourceChainId !== destinationChainId &&
+         sourceChainId in CROSS_CHAIN_MANAGER_ADDRESSES &&
+         destinationChainId in CROSS_CHAIN_MANAGER_ADDRESSES;
+}
+
+// Default strategy ID for auto-deposit
+// export const DEFAULT_YIELD_OPTIMIZER_STRATEGY_ID = 1;
+
+// Chain configuration validation
+export function validateChainConfiguration(chainId: number): {
+  isValid: boolean;
+  hasManager: boolean;
+  hasUsdc: boolean;
+  hasRouter: boolean;
+  hasSelector: boolean;
+  issues: string[];
+} {
+  const issues: string[] = [];
+  const hasManager = chainId in CROSS_CHAIN_MANAGER_ADDRESSES;
+  const hasUsdc = chainId in USDC_CONTRACT_ADDRESSES_CROSSCHAIN;
+  const hasRouter = chainId in CCIP_ROUTER_ADDRESSES;
+  const hasSelector = chainId in CHAINLINK_CHAIN_SELECTORS_MAP;
+
+  if (!hasManager) issues.push(`Missing CrossChainManager address for chain ${chainId}`);
+  if (!hasUsdc) issues.push(`Missing USDC address for chain ${chainId}`);
+  if (!hasRouter) issues.push(`Missing CCIP Router address for chain ${chainId}`);
+  if (!hasSelector) issues.push(`Missing chain selector for chain ${chainId}`);
+
+  return {
+    isValid: hasManager && hasUsdc && hasRouter && hasSelector,
+    hasManager,
+    hasUsdc,
+    hasRouter,
+    hasSelector,
+    issues
+  };
+}

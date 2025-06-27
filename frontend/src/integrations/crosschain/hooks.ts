@@ -47,6 +47,26 @@ export function useGetTransferFee(
     }
   }, [amount]);
 
+  // Add validation for chain selector existence
+  const isValidChainConfiguration = useMemo(() => {
+    const hasSourceManager = !!sourceManagerAddress;
+    const hasDestinationSelector = !!destinationChainSelector;
+    const hasUsdcAddress = !!usdcAddressOnSource;
+    const hasValidChainIds = !!effectiveSourceChainId && !!destinationChainId;
+    
+    if (!hasSourceManager) {
+      console.warn(`No CrossChainManager address found for source chain ${effectiveSourceChainId}`);
+    }
+    if (!hasDestinationSelector) {
+      console.warn(`No chain selector found for destination chain ${destinationChainId}`);
+    }
+    if (!hasUsdcAddress) {
+      console.warn(`No USDC address found for source chain ${effectiveSourceChainId}`);
+    }
+    
+    return hasSourceManager && hasDestinationSelector && hasUsdcAddress && hasValidChainIds;
+  }, [sourceManagerAddress, destinationChainSelector, usdcAddressOnSource, effectiveSourceChainId, destinationChainId]);
+
   const { data: feeData, isLoading, isError, error, refetch } = useReadContract({
     address: sourceManagerAddress,
     abi: CrossChainManagerABI,
@@ -58,14 +78,9 @@ export function useGetTransferFee(
     ],
     query: {
       enabled:
-        !!sourceManagerAddress &&
-        !!destinationChainSelector &&
-        !!usdcAddressOnSource &&
+        isValidChainConfiguration &&
         parsedAmount > 0n &&
-        !!(receiverAddress || userAddress) &&
-        !!effectiveSourceChainId &&
-        !!destinationChainId
-      ,
+        !!(receiverAddress || userAddress),
       refetchInterval: 15000,
     },
   });
@@ -79,9 +94,10 @@ export function useGetTransferFee(
     fee: formattedFee,
     feeRaw: feeData,
     isLoading,
-    isError,
-    error,
+    isError: isError || !isValidChainConfiguration,
+    error: error || (!isValidChainConfiguration ? new Error('Invalid chain configuration') : null),
     refetch, // Expose refetch from useReadContract
+    isValidChainConfiguration,
   };
 }
 
@@ -100,7 +116,8 @@ export function useTransferCrossChain(
     isLoading: isLoadingFee,
     isError: isErrorFee,
     error: errorFee,
-    refetch: refetchEstimatedFee // Get the refetch function from useGetTransferFee
+    refetch: refetchEstimatedFee, // Get the refetch function from useGetTransferFee
+    isValidChainConfiguration
   } = useGetTransferFee(
     amount,
     destinationChainId,
@@ -112,6 +129,19 @@ export function useTransferCrossChain(
   const destinationChainSelector = destinationChainId ? CHAINLINK_CHAIN_SELECTORS_MAP[destinationChainId] : undefined;
   const usdcAddressOnSource = currentChainId ? USDC_CONTRACT_ADDRESSES_CROSSCHAIN[currentChainId] : undefined;
 
+  // Add logging for debugging
+  useMemo(() => {
+    if (currentChainId && destinationChainId) {
+      console.log('CrossChain Transfer Configuration:', {
+        sourceChainId: currentChainId,
+        destinationChainId,
+        sourceManagerAddress,
+        destinationChainSelector: destinationChainSelector?.toString(),
+        usdcAddressOnSource,
+        isValidChainConfiguration
+      });
+    }
+  }, [currentChainId, destinationChainId, sourceManagerAddress, destinationChainSelector, usdcAddressOnSource, isValidChainConfiguration]);
 
   const parsedAmount = useMemo(() => {
     try {
@@ -123,6 +153,7 @@ export function useTransferCrossChain(
     }
   }, [amount]);
 
+  // Enhanced simulation with better error handling
   const {
     data: simulateData,
     error: simulateError,
@@ -139,6 +170,7 @@ export function useTransferCrossChain(
     value: feeRaw,
     query: {
       enabled:
+        isValidChainConfiguration &&
         !!sourceManagerAddress &&
         !!destinationChainSelector &&
         !!usdcAddressOnSource &&
@@ -146,10 +178,37 @@ export function useTransferCrossChain(
         !!feeRaw &&
         feeRaw > 0n &&
         !!(receiverAddress || userAddress) &&
-        !isLoadingFee && !isErrorFee &&
-        !!currentChainId && !!destinationChainId,
+        !isLoadingFee && 
+        !isErrorFee &&
+        !!currentChainId && 
+        !!destinationChainId,
     },
   });
+
+  // Add logging for simulation errors
+  useMemo(() => {
+    if (simulateError) {
+      console.error('Simulation Error Details:', {
+        error: simulateError,
+        sourceChainId: currentChainId,
+        destinationChainId,
+        amount: parsedAmount.toString(),
+        fee: feeRaw?.toString(),
+        enabled: isValidChainConfiguration &&
+          !!sourceManagerAddress &&
+          !!destinationChainSelector &&
+          !!usdcAddressOnSource &&
+          parsedAmount > 0n &&
+          !!feeRaw &&
+          feeRaw > 0n &&
+          !!(receiverAddress || userAddress) &&
+          !isLoadingFee && 
+          !isErrorFee &&
+          !!currentChainId && 
+          !!destinationChainId
+      });
+    }
+  }, [simulateError, currentChainId, destinationChainId, parsedAmount, feeRaw, isValidChainConfiguration, sourceManagerAddress, destinationChainSelector, usdcAddressOnSource, receiverAddress, userAddress, isLoadingFee, isErrorFee]);
 
   const {
     data: hash,
@@ -202,21 +261,46 @@ export function useTransferCrossChain(
 
 
   const write = useCallback(() => {
+    if (!isValidChainConfiguration) {
+      toast.error("Invalid chain configuration. Please check chain support.");
+      return;
+    }
+
     if (simulateData?.request) {
+      console.log('Executing transfer with config:', {
+        sourceChain: currentChainId,
+        destinationChain: destinationChainId,
+        amount: parsedAmount.toString(),
+        fee: feeRaw?.toString()
+      });
       transfer(simulateData.request);
     } else if (simulateError) {
-      // Fixed: Use message instead of shortMessage and add proper error handling
-      const errorMessage = simulateError.message || 'Unknown simulation error';
+      // Enhanced error handling with more specific messages
+      let errorMessage = simulateError.message || 'Unknown simulation error';
+      
+      // Check for common CCIP errors
+      if (errorMessage.includes('router')) {
+        errorMessage = 'CCIP Router error. This route may not be supported.';
+      } else if (errorMessage.includes('selector')) {
+        errorMessage = 'Invalid destination chain selector. This route may not be active.';
+      } else if (errorMessage.includes('fee')) {
+        errorMessage = 'Insufficient fee for cross-chain transfer.';
+      } else if (errorMessage.includes('allowance')) {
+        errorMessage = 'Insufficient USDC allowance.';
+      } else if (errorMessage.includes('balance')) {
+        errorMessage = 'Insufficient USDC balance.';
+      }
+
       toast.error(`Transaction simulation failed: ${errorMessage}`);
       console.error("Simulation error:", simulateError);
     } else {
       toast.error("Transfer not ready: Simulation data missing.");
     }
-  }, [simulateData, simulateError, transfer]);
+  }, [simulateData, simulateError, transfer, isValidChainConfiguration, currentChainId, destinationChainId, parsedAmount, feeRaw]);
 
   const isLoading = isSimulating || isWritePending || isConfirming || isLoadingFee;
-  const isError = !!simulateError || !!writeError || isConfirmError || !!errorFee;
-  const error = simulateError || writeError || confirmError || errorFee;
+  const isError = !!simulateError || !!writeError || isConfirmError || !!errorFee || !isValidChainConfiguration;
+  const error = simulateError || writeError || confirmError || errorFee || (!isValidChainConfiguration ? new Error('Invalid chain configuration') : null);
 
   return {
     write,
@@ -226,6 +310,7 @@ export function useTransferCrossChain(
     isSuccess: isConfirmed && !!ccipMessageId,
     isError,
     error,
-    refetchEstimatedFee // Now returning the refetch function
+    refetchEstimatedFee, // Now returning the refetch function
+    isValidChainConfiguration
   };
 }
