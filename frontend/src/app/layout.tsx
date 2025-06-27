@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   title: "SageFi - Your AI Financial Navigator for DeFi",
   description:
     "Execute sophisticated cross-chain strategies through simple conversations. No technical knowledge required.",
+    icons: {
+      icon: '/favicon.ico', // or '/favicon.png' if using PNG
+      shortcut: '/favicon.ico',
+      // for iOS devices
+    },
 }
 
 export default function RootLayout({
