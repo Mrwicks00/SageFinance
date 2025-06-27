@@ -57,11 +57,8 @@ const providers: Record<ChainKey, EthereumPrivateKeyProvider> = {
   })
 }
 
-// Initialize with default chain (Sepolia)
 export const web3auth = new Web3AuthNoModal({
   clientId,
-  chainConfig: chainConfigs.sepolia,
-  privateKeyProvider: providers.sepolia,
   web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
 })
 
@@ -79,10 +76,10 @@ export const openloginAdapter = new OpenloginAdapter({
   },
 })
 
-// Function to configure adapter (call this after init)
-export const configureWeb3AuthAdapter = () => {
+// Function to configure adapter (call this after init) 
+export const configureWeb3AuthAdapter = async () => {
   if (typeof window !== 'undefined') {
-    web3auth.configureAdapter(openloginAdapter)
+    await web3auth.init()
   }
 }
 
@@ -93,14 +90,14 @@ export const switchChain = async (chainKey: ChainKey) => {
   }
   
   const chainConfig = chainConfigs[chainKey]
+  const provider = providers[chainKey]
   
   try {
-    // Try to switch first
-    await web3auth.switchChain({ chainId: chainConfig.chainId })
-  } catch {
-    // If chain doesn't exist, add it first
-    await web3auth.addChain(chainConfig)
-    await web3auth.switchChain({ chainId: chainConfig.chainId })
+    // Connect to the specific provider for this chain
+    await provider.setupProvider(chainConfig.chainId)
+  } catch (error) {
+    console.error("Failed to switch chain:", error)
+    throw error
   }
 }
 

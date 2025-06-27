@@ -3,6 +3,8 @@
 import React from "react";
 import { ArrowUpDown, ArrowRight } from "lucide-react";
 import { Chain } from "@/data/crosschain";
+import Image from 'next/image';
+
 
 interface TransferFormProps {
   fromChain: Chain;
@@ -88,10 +90,12 @@ export const TransferForm: React.FC<TransferFormProps> = ({
       {/* Transfer Direction Visual */}
       <div className="flex items-center justify-between bg-gray-900 rounded-xl p-4 border border-gray-700">
         <div className="flex items-center space-x-3">
-          <img
+          <Image
             src={fromChain.logo}
             alt={fromChain.name}
-            className="w-8 h-8 rounded-full"
+            className=" rounded-full"
+            width={24}
+            height={24}
           />
           <div>
             <div className="text-white font-medium">{fromChain.name}</div>
@@ -102,10 +106,12 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         <ArrowRight className="w-6 h-6 text-yellow-500" />
 
         <div className="flex items-center space-x-3">
-          <img
+          <Image
             src={toChain.logo}
             alt={toChain.name}
-            className="w-8 h-8 rounded-full"
+            className=" rounded-full"
+            width={24}
+            height={24}
           />
           <div>
             <div className="text-white font-medium">{toChain.name}</div>

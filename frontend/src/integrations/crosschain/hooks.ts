@@ -10,7 +10,7 @@ import {
   useChainId,
   useAccount
 } from 'wagmi';
-import { Address, parseUnits, formatUnits, Hex, parseAbiItem } from 'viem';
+import { Address, parseUnits, formatUnits, Hex, parseAbiItem, decodeEventLog, getEventSelector } from 'viem';
 import {
   CrossChainManagerABI,
   CROSS_CHAIN_MANAGER_ADDRESSES,
@@ -19,7 +19,7 @@ import {
 } from './constants';
 import { toast } from 'react-toastify';
 
-import { useErc20Allowance, useApproveErc20, ERC20_ABI } from '@/integrations/erc20/hooks';
+// import { useErc20Allowance, useApproveErc20, ERC20_ABI } from '@/integrations/erc20/hooks';
 
 
 // --- Hook to get CCIP transfer fee ---
@@ -92,7 +92,7 @@ export function useTransferCrossChain(
   receiverAddress: Address | undefined
 ) {
   const { address: userAddress, chainId: currentChainId } = useAccount();
-  const publicClient = usePublicClient();
+  // const publicClient = usePublicClient();
 
   // Get transfer fee using the dedicated hook, passing the currentChainId as source
   const {
@@ -172,17 +172,22 @@ export function useTransferCrossChain(
   });
 
   const ccipMessageId = useMemo(() => {
-    if (!receipt || !publicClient) return undefined;
+    if (!receipt || !sourceManagerAddress) return undefined;
+    
     try {
       const transferInitiatedEvent = parseAbiItem('event CrossChainTransferInitiated(address indexed sender, uint256 amount, uint64 indexed destinationChainSelector, bytes32 indexed messageId)');
+      
+      // Get event selector using viem's utility function
+      const eventSelector = getEventSelector(transferInitiatedEvent);
 
       const logs = receipt.logs.filter(
-        (log) => log.address.toLowerCase() === sourceManagerAddress?.toLowerCase() &&
-                  log.topics[0] === publicClient.getEventSelector(transferInitiatedEvent)
+        (log) => log.address.toLowerCase() === sourceManagerAddress.toLowerCase() &&
+                  log.topics[0] === eventSelector
       );
 
       if (logs.length > 0) {
-        const decodedLog = publicClient.decodeEventLog({
+        // Use viem's decodeEventLog utility function
+        const decodedLog = decodeEventLog({
           abi: [transferInitiatedEvent],
           data: logs[0].data,
           topics: logs[0].topics,
@@ -193,14 +198,16 @@ export function useTransferCrossChain(
       console.error("Error parsing CrossChainTransferInitiated event:", e);
     }
     return undefined;
-  }, [receipt, publicClient, sourceManagerAddress]);
+  }, [receipt, sourceManagerAddress]);
 
 
   const write = useCallback(() => {
     if (simulateData?.request) {
       transfer(simulateData.request);
     } else if (simulateError) {
-      toast.error(`Transaction simulation failed: ${simulateError.shortMessage || simulateError.message}`);
+      // Fixed: Use message instead of shortMessage and add proper error handling
+      const errorMessage = simulateError.message || 'Unknown simulation error';
+      toast.error(`Transaction simulation failed: ${errorMessage}`);
       console.error("Simulation error:", simulateError);
     } else {
       toast.error("Transfer not ready: Simulation data missing.");
@@ -208,7 +215,7 @@ export function useTransferCrossChain(
   }, [simulateData, simulateError, transfer]);
 
   const isLoading = isSimulating || isWritePending || isConfirming || isLoadingFee;
-  const isError = simulateError || writeError || isConfirmError || errorFee;
+  const isError = !!simulateError || !!writeError || isConfirmError || !!errorFee;
   const error = simulateError || writeError || confirmError || errorFee;
 
   return {
@@ -219,6 +226,6 @@ export function useTransferCrossChain(
     isSuccess: isConfirmed && !!ccipMessageId,
     isError,
     error,
-    refetchEstimatedFee // <<<--- FIXED HERE: Now returning the refetch function
+    refetchEstimatedFee // Now returning the refetch function
   };
 }

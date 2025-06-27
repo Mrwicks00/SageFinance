@@ -4,9 +4,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAccount, useChainId } from 'wagmi';
 import { useWallet } from '@/contexts/WalletContext';
-import { useErc20Balance, useErc20Allowance, useApproveErc20, useErc20Decimals } from '@/integrations/erc20/hooks';
+import { 
+  useErc20Balance, 
+  useApproveErc20ForYieldOptimizer, 
+  useErc20AllowanceForYieldOptimizer, 
+  useErc20Decimals 
+} from '@/integrations/erc20/hooks';
 import { useDeposit } from '@/integrations/yieldOptimizer/hooks';
-// Assuming TOKEN_ADDRESSES is imported here as TOKEN_ADDRESSES_MAP
 import { TOKEN_ADDRESSES_MAP, STRATEGY_IDS } from '@/integrations/yieldOptimizer/constants'; 
 import { formatUnits, parseUnits } from 'viem';
 import { toast } from 'react-toastify';
@@ -21,7 +25,7 @@ interface DepositFormProps {
 }
 
 export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProps) {
-  const { address: userAddress } = useAccount();
+  // const { address: userAddress } = useAccount();
   const connectedChainId = useChainId();
   const { isConnected, isWrongNetwork } = useWallet(); 
 
@@ -39,26 +43,20 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
 
   // Set the default selected token when available tokens change or on initial render
   useEffect(() => {
-    // Only update if there are available tokens and either no token is selected
-    // or the currently selected token is no longer available for the new chain.
     if (availableDepositTokenSymbols.length > 0 && 
         (!selectedTokenSymbol || !availableDepositTokenSymbols.includes(selectedTokenSymbol))) {
       setSelectedTokenSymbol(availableDepositTokenSymbols[0]);
     } else if (availableDepositTokenSymbols.length === 0 && selectedTokenSymbol !== '') {
-      // If no tokens are available for the selected chain, clear the selection
       setSelectedTokenSymbol('');
     }
-    // Also, clear amount if token changes or becomes unavailable
     setAmount(''); 
-  }, [availableDepositTokenSymbols, selectedTokenSymbol, selectedChain]); // Depend on selectedChain to reset on chain change
-
+  }, [availableDepositTokenSymbols, selectedTokenSymbol, selectedChain]);
 
   // Derive the deposit token address for the current chain and selected symbol
   const depositTokenAddress = useMemo(() => {
-    // Only attempt to get address if a token is selected and we are on the correct chain
     if (!selectedTokenSymbol || !connectedChainId || connectedChainId !== selectedChain.id) return undefined;
     const tokenMap = TOKEN_ADDRESSES_MAP[selectedTokenSymbol];
-    return tokenMap ? (tokenMap[connectedChainId] as `0x${string}`) : undefined; // Type assertion for viem Address
+    return tokenMap ? (tokenMap[connectedChainId] as `0x${string}`) : undefined;
   }, [selectedTokenSymbol, connectedChainId, selectedChain.id]);
 
   // Fetch token decimals dynamically for the selected token and chain
@@ -67,15 +65,27 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
   // Fetch user's ERC-20 balance
   const { balance: userTokenBalance, refetch: refetchUserTokenBalance } = useErc20Balance(depositTokenAddress);
 
-  // Fetch allowance for the YieldOptimizer contract
+  // Fetch allowance for the YieldOptimizer contract - Using specific hook
   const { allowance: yieldOptimizerAllowance, refetch: refetchYieldOptimizerAllowance } =
-    useErc20Allowance(depositTokenAddress, connectedChainId);
+    useErc20AllowanceForYieldOptimizer(depositTokenAddress, connectedChainId);
 
   // Determine strategy ID based on protocol ID from selectedProtocol
   const strategyId = useMemo(() => {
     const protocolKey = selectedProtocol.id.toUpperCase();
     return STRATEGY_IDS[protocolKey];
   }, [selectedProtocol.id]);
+
+  // Calculate parsed amount for approval/deposit
+  const parsedAmount = useMemo(() => {
+    if (!amount || !tokenDecimals) return undefined;
+    try {
+      const parsed = parseUnits(amount, tokenDecimals);
+      return parsed > 0n ? parsed : undefined;
+    } catch (e) {
+      console.error("Error parsing amount:", e);
+      return undefined;
+    }
+  }, [amount, tokenDecimals]);
   
   // Log derived values for debugging
   useEffect(() => {
@@ -92,6 +102,7 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
       tokenDecimals,
       userTokenBalance: userTokenBalance?.toString(),
       yieldOptimizerAllowance: yieldOptimizerAllowance?.toString(),
+      parsedAmount: parsedAmount?.toString(),
     });
   }, [
     selectedChain.id,
@@ -106,18 +117,17 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
     tokenDecimals,
     userTokenBalance,
     yieldOptimizerAllowance,
+    parsedAmount,
   ]);
 
-  // Wagmi hook for ERC-20 approval
+  // Wagmi hook for ERC-20 approval - Using specific hook for Yield Optimizer
   const {
     write: approveToken,
     isLoading: isApproving,
     isSuccess: isApproved,
     error: approveError,
-  } = useApproveErc20(
-    depositTokenAddress,
-    tokenDecimals !== undefined && amount ? parseUnits(amount, tokenDecimals) : undefined
-  );
+    reset: resetApproval,
+  } = useApproveErc20ForYieldOptimizer(depositTokenAddress, parsedAmount, connectedChainId);
 
   // Wagmi hook for deposit
   const {
@@ -125,6 +135,7 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
     isLoading: isDepositing,
     isSuccess: isDeposited,
     error: depositError,
+    reset: resetDeposit,
   } = useDeposit(depositTokenAddress, strategyId, amount, tokenDecimals, connectedChainId);
 
   // Handle toast notifications for approval
@@ -145,10 +156,14 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
       toast.success('Deposit successful!');
       setAmount(''); // Clear amount field on success
       refetchUserTokenBalance(); // Refetch user balance after successful deposit
+      resetApproval(); // Reset approval state
+      resetDeposit(); // Reset deposit state
     }
-  }, [depositError, isDeposited, refetchUserTokenBalance]);
+  }, [depositError, isDeposited, refetchUserTokenBalance, resetApproval, resetDeposit]);
 
   const handleDeposit = async () => {
+    console.log('Handle deposit clicked'); // Debug log
+
     if (!isConnected) {
       toast.error('Please connect your wallet to proceed.');
       return;
@@ -169,20 +184,34 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
       console.error("Missing config:", { selectedTokenSymbol, depositTokenAddress, strategyId, tokenDecimals });
       return;
     }
+
     if (!amount || parseFloat(amount) <= 0) {
       toast.error('Please enter a valid amount to deposit.');
       return;
     }
-    const parsedAmount = parseUnits(amount, tokenDecimals);
+
+    if (!parsedAmount) {
+      toast.error('Invalid amount entered.');
+      return;
+    }
+
     if (userTokenBalance === undefined || parsedAmount > userTokenBalance) {
       toast.error('Insufficient token balance.');
       return;
     }
 
+    console.log('Checking allowance...', {
+      yieldOptimizerAllowance: yieldOptimizerAllowance?.toString(),
+      parsedAmount: parsedAmount.toString(),
+      needsApproval: yieldOptimizerAllowance === undefined || parsedAmount > yieldOptimizerAllowance
+    });
+
     // If allowance is not enough, approve first
     if (yieldOptimizerAllowance === undefined || parsedAmount > yieldOptimizerAllowance) {
+      console.log('Triggering approval...');
       approveToken?.(); // Trigger the approve transaction
     } else {
+      console.log('Triggering deposit...');
       depositFunds?.(); // Trigger the deposit transaction
     }
   };
@@ -194,8 +223,8 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
   const isDepositPossible = useMemo(() => {
     if (!amount || parseFloat(amount) <= 0 || !tokenDecimals || userTokenBalance === undefined) return false;
     try {
-        const parsedAmount = parseUnits(amount, tokenDecimals);
-        return parsedAmount > 0 && parsedAmount <= userTokenBalance;
+        const parsed = parseUnits(amount, tokenDecimals);
+        return parsed > 0 && parsed <= userTokenBalance;
     } catch (e) {
         console.error("Error parsing amount for isDepositPossible:", e);
         return false;
@@ -205,14 +234,13 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
   const isApprovedForDeposit = useMemo(() => {
     if (!amount || parseFloat(amount) <= 0 || !tokenDecimals || yieldOptimizerAllowance === undefined) return false;
     try {
-        const parsedAmount = parseUnits(amount, tokenDecimals);
-        return parsedAmount <= yieldOptimizerAllowance;
+        const parsed = parseUnits(amount, tokenDecimals);
+        return parsed <= yieldOptimizerAllowance;
     } catch (e) {
         console.error("Error parsing amount for isApprovedForDeposit:", e);
         return false;
     }
   }, [amount, tokenDecimals, yieldOptimizerAllowance]);
-
 
   const isLoading = isApproving || isDepositing;
 
@@ -220,7 +248,7 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
   const isReadyForInteraction = isConnected && isCorrectChainForForm && !isWrongNetwork;
 
   return (
-    <div className="bg-black text-white p-6 rounded-lg shadow-xl border border-gray-700"> {/* Updated styling */}
+    <div className="bg-black text-white p-6 rounded-lg shadow-xl border border-gray-700">
       <h3 className="text-xl font-semibold text-white mb-4">
         Deposit into {selectedProtocol.displayName} on {selectedChain.displayName}
       </h3>
@@ -299,12 +327,13 @@ export function DepositForm({ selectedChain, selectedProtocol }: DepositFormProp
         </p>
       </div>
 
+     
       <button
         onClick={handleDeposit}
         className={`w-full py-3 px-4 rounded font-bold text-lg focus:outline-none focus:shadow-outline transition-colors duration-200
-          ${(isLoading || !isReadyForInteraction || !isDepositPossible || !selectedTokenSymbol || strategyId === undefined) // Added strategyId check for robust disabling
+          ${(isLoading || !isReadyForInteraction || !isDepositPossible || !selectedTokenSymbol || strategyId === undefined)
             ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-            : 'bg-yellow-500 hover:bg-yellow-600 text-black' // Yellow button with black text
+            : 'bg-yellow-500 hover:bg-yellow-600 text-black'
           }`}
         disabled={isLoading || !isReadyForInteraction || !isDepositPossible || !selectedTokenSymbol || strategyId === undefined}
       >

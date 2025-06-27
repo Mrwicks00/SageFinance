@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useDisconnect } from "wagmi"
-import { 
-  Copy, 
-  ExternalLink, 
-  LogOut, 
-  Wallet, 
-  RefreshCw, 
+import {
+  Copy,
+  ExternalLink,
+  LogOut,
+  Wallet,
+  RefreshCw,
   AlertTriangle,
   Coins,
   DollarSign,
@@ -13,7 +13,10 @@ import {
 } from "lucide-react";
 import { useWallet } from "../../contexts/WalletContext"
 import { useWalletData } from "../../hooks/useWalletData"
-import { NETWORK_CONFIGS, getChainById } from "../../constants/networks"
+// Import SUPPORTED_CHAINS_BY_ID from the new unified data source
+// import { SUPPORTED_CHAINS_BY_ID } from '@/data/crosschain';
+import Image from 'next/image';
+
 
 interface WalletInfoProps {
   isOpen: boolean;
@@ -24,14 +27,16 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
   const { disconnect } = useDisconnect()
   const {
     address,
-    chainId,
+    currentChainId, // Use currentChainId from WalletContext
     isWrongNetwork,
     switchToSupportedNetwork,
     disconnectWeb3Auth,
     isWeb3AuthConnected,
+    currentChain, // Directly use currentChain from WalletContext
   } = useWallet()
 
-  const { walletData, loading, error, refetch } = useWalletData(address, chainId)
+  const { walletData, loading, error, refetch } = useWalletData(address, currentChainId) // Pass currentChainId
+
   const [copied, setCopied] = useState(false)
 
   // Add this early return to prevent rendering when not open
@@ -64,32 +69,27 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
     return num.toFixed(decimals)
   }
 
-  const getExplorerUrl = (address: string, chainId?: number) => {
-    const explorers: Record<number, string> = {
-      1: "https://etherscan.io",
-      137: "https://polygonscan.com",
-      56: "https://bscscan.com",
-      43114: "https://snowtrace.io",
-      11155111: "https://sepolia.etherscan.io",
+  // Updated getExplorerUrl to use currentChain.blockExplorer or a fallback
+  const getExplorerUrl = (addr: string, chain?: typeof currentChain) => {
+    if (chain && chain.blockExplorer) {
+      return `${chain.blockExplorer}/address/${addr}`;
     }
-    
-    const baseUrl = chainId ? explorers[chainId] : "https://etherscan.io"
-    return `${baseUrl}/address/${address}`
+    // Fallback if chain or its blockExplorer is not available
+    const defaultExplorer = 'https://etherscan.io'; // Fallback to a default
+    return `${defaultExplorer}/address/${addr}`;
   }
-
-  const currentNetwork = chainId ? NETWORK_CONFIGS[chainId as keyof typeof NETWORK_CONFIGS] : null
 
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black bg-opacity-60 transition-opacity duration-300"
         style={{ zIndex: 9998 }}
         onClick={onClose}
       />
-      
+
       {/* Slide-in Panel */}
-      <div 
+      <div
         className="fixed top-0 right-0 h-screen w-96 bg-gray-900 shadow-2xl transform transition-transform duration-300 ease-in-out translate-x-0"
         style={{ zIndex: 9999 }}
       >
@@ -131,7 +131,7 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
                   <div className="flex-1">
                     <p className="text-red-400 font-medium text-sm">Unsupported Network</p>
                     <p className="text-red-300 text-xs mt-1">Please switch to a supported network</p>
-                    <button 
+                    <button
                       onClick={switchToSupportedNetwork}
                       className="mt-2 text-xs bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 transition-colors"
                     >
@@ -161,7 +161,7 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
                 <Wallet className="w-4 h-4 text-gray-400" />
                 <span className="text-sm font-medium text-white">Account</span>
               </div>
-              
+
               <div className="space-y-3">
                 <div>
                   <label className="text-xs font-medium text-gray-400">Address</label>
@@ -175,7 +175,7 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
                         <Copy className="w-3 h-3" />
                       </button>
                       <a
-                        href={getExplorerUrl(address || '', chainId)}
+                        href={getExplorerUrl(address || '', currentChain)} 
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1 text-gray-400 hover:text-white rounded hover:bg-gray-600 transition-colors"
@@ -189,12 +189,13 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
                   )}
                 </div>
 
-                {currentNetwork && (
+                {/* Use currentChain directly */}
+                {currentChain && (
                   <div>
                     <label className="text-xs font-medium text-gray-400">Network</label>
                     <div className="flex items-center space-x-2 mt-1 p-2 bg-gray-700 rounded border border-gray-600">
-                       <img src={currentNetwork.icon} alt=""  className='w-5 rounded-md' />
-                      <span className="text-sm font-medium text-white">{currentNetwork.name}</span>
+                       <Image src={currentChain.logo} alt={currentChain.name} className=' rounded-md' width={24} height={24} /> {/* Use .logo and .name */}
+                      <span className="text-sm font-medium text-white">{currentChain.name}</span>
                     </div>
                   </div>
                 )}
@@ -207,7 +208,7 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
                 <DollarSign className="w-4 h-4 text-gray-400" />
                 <span className="text-sm font-medium text-white">Balance</span>
               </div>
-              
+
               <div className="text-center py-3">
                 {loading ? (
                   <div className="animate-pulse">
@@ -220,7 +221,7 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
                       {formatBalance(walletData?.nativeBalance || '0')}
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
-                      {getChainById(chainId)?.nativeCurrency?.symbol || 'ETH'}
+                      {currentChain?.nativeCurrency?.symbol || 'ETH'} {/* Use currentChain */}
                     </div>
                   </>
                 )}
@@ -240,7 +241,7 @@ export function WalletInfo({ isOpen, onClose }: WalletInfoProps) {
                   </span>
                 )}
               </div>
-              
+
               {loading ? (
                 <div className="space-y-2">
                   {[1, 2].map((i) => (

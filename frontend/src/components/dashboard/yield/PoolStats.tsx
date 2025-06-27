@@ -1,7 +1,7 @@
 "use client";
 
 import { TrendingUp, DollarSign, Users, Zap } from "lucide-react";
-import { Chain, Protocol, POOL_DATA, getAvailableTokens } from "@/data/yieldData";
+import { Chain, Protocol, POOL_DATA} from "@/data/yieldData";
 
 interface PoolStatsProps {
   selectedChain: Chain;

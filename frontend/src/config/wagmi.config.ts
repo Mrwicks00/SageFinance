@@ -4,7 +4,6 @@ import { createConfig, http } from "wagmi"
 import { sepolia, baseSepolia, arbitrumSepolia } from "wagmi/chains"
 import { 
   coinbaseWallet, 
-  metaMask, 
   walletConnect, 
   injected
 } from "wagmi/connectors"
@@ -78,12 +77,12 @@ export const walletOptions = [
   }
 ]
 
-declare global {
-  interface Window {
-    ethereum?: {
-      isMetaMask?: boolean
-      isCoinbaseWallet?: boolean
-      request?: (...args: any[]) => Promise<any>
-    }
-  }
-}
+// declare global {
+//   interface Window {
+//     ethereum?: {
+//       isMetaMask?: boolean
+//       isCoinbaseWallet?: boolean
+//       request?: (...args: any[]) => Promise<any>
+//     }
+//   }
+// }

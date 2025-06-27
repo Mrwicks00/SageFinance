@@ -51,7 +51,7 @@ export interface PoolData {
         value: 8500,
         chain: "ethereum",
         protocol: "aave",
-        logo: "images/usdc-logo.png"
+        logo: "/images/usdc-logo.png"
       },
       {
         name: "USD Coin",
@@ -60,7 +60,7 @@ export interface PoolData {
         value: 3200,
         chain: "base",
         protocol: "compound",
-        logo: "images/usdc-logo.png"
+        logo: "/images/usdc-logo.png"
 
       },
       {
@@ -70,7 +70,7 @@ export interface PoolData {
         value: 840.67,
         chain: "ethereum",
         protocol: "staking",
-        logo: "images/sage-logo.png"
+        logo: "/images/sage-logo.png"
       },
     ],
   };

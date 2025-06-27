@@ -16,7 +16,18 @@ import { useWithdraw } from '@/integrations/yieldOptimizer/hooks';
 import { YIELD_OPTIMIZER_ADDRESSES, STRATEGY_IDS, YIELD_OPTIMIZER_ABI } from '@/integrations/yieldOptimizer/constants';
 
 // Import your data and types from yieldData.ts
-import { SUPPORTED_CHAINS, PROTOCOLS, POOL_DATA, Token, getPoolInfo } from "@/data/yieldData";
+import { SUPPORTED_CHAINS, PROTOCOLS, Token, getPoolInfo } from "@/data/yieldData";
+import Image from 'next/image';
+
+type UserPositionResult = readonly [bigint, bigint, bigint, bigint];
+type StrategyDetailsResult = readonly [bigint, string, Address, Address, boolean];
+
+type ContractCallResult<T> = {
+  status: 'success' | 'failure';
+  result: T;
+  error?: { message?: string };
+};
+
 
 
 const MAX_POSITIONS_PER_USER_CONTRACT_VALUE = 50; // Max number of possible user positions in contract
@@ -66,7 +77,7 @@ export function UserPositions() {
 
   const totalDepositedFormatted = useMemo(() => {
     if (totalDepositedBalanceBigInt === undefined) return '0.00';
-    return formatUnits(totalDepositedBalanceBigInt, 6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(formatUnits(totalDepositedBalanceBigInt, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }, [totalDepositedBalanceBigInt]);
 
 
@@ -85,23 +96,28 @@ export function UserPositions() {
     return calls;
   }, [userAddress, connectedChainId]);
 
-  const { data: rawUserPositionsData, isLoading: isLoadingUserPositions, refetch: refetchUserPositions } = useReadContracts({
+  const { data: rawUserPositionsResponse, isLoading: isLoadingUserPositions, refetch: refetchUserPositions } = useReadContracts({
     contracts: userPositionsCalls,
     query: {
       enabled: isConnected && !!userAddress && !!YIELD_OPTIMIZER_ADDRESSES[connectedChainId],
-      select: (data) => data.map((item, index) => { // Added index for better logging
-        if (item.status === 'success') {
-          return item.result;
-        }
-        // Changed to console.warn for less alarming output and better explanation
-        if (item.status === 'failure') {
-          console.warn(`UserPositions call for index ${index} reverted (likely unused position, expected for empty slots). Error: ${item.error.message}`);
-        }
-        return undefined;
-      }).filter(Boolean) as (readonly [bigint, bigint, bigint, bigint])[],
       refetchInterval: 10000,
     }
   });
+  
+  // Process the data outside the hook
+  const rawUserPositionsData = useMemo(() => {
+    if (!rawUserPositionsResponse) return [];
+    const results: UserPositionResult[] = [];
+    
+    rawUserPositionsResponse.forEach((item, index) => {
+      if (item.status === 'success') {
+        results.push(item.result as UserPositionResult);
+      } else if (item.status === 'failure') {
+        console.warn(`UserPositions call for index ${index} reverted (likely unused position, expected for empty slots). Error: ${item.error?.message || 'Unknown error'}`);
+      }
+    });
+    return results;
+  }, [rawUserPositionsResponse?.length]);
 
   // --- 3. Identify active positions and their actual strategy IDs from rawUserPositionsData ---
   const activeUserPositionRawData = useMemo(() => {
@@ -147,31 +163,36 @@ export function UserPositions() {
     return calls;
   }, [activeUserPositionRawData, connectedChainId]);
 
-  const { data: rawStrategyDetailsData, isLoading: isLoadingStrategyDetails, refetch: refetchStrategyDetails } = useReadContracts({
+  const { data: rawStrategyDetailsResponse, isLoading: isLoadingStrategyDetails, refetch: refetchStrategyDetails } = useReadContracts({
     contracts: strategyDetailsCalls,
     query: {
       enabled: activeUserPositionRawData.length > 0 && !!connectedChainId && !!YIELD_OPTIMIZER_ADDRESSES[connectedChainId],
-      select: (data) => data.map(item => {
-        if (item.status === 'success') {
-          return item.result;
-        }
-        // Changed to console.warn for less alarming output
-        if (item.status === 'failure') {
-          console.warn(`Strategies call for a strategy ID reverted. Error: ${item.error.message}`);
-        }
-        return undefined;
-      }).filter(Boolean) as (readonly [bigint, string, Address, Address, boolean])[],
       refetchInterval: 10000,
     }
   });
-
+  
+  // Process the strategy details data outside the hook
+  const rawStrategyDetailsData = useMemo(() => {
+    if (!rawStrategyDetailsResponse) return []; // Changed from rawUserPositionsResponse to rawStrategyDetailsResponse
+    const results: StrategyDetailsResult[] = [];
+    
+    rawStrategyDetailsResponse.forEach((item, index) => {
+      if (item.status === 'success') {
+        results.push(item.result as StrategyDetailsResult);
+      } else if (item.status === 'failure') {
+        console.warn(`Strategy details call for index ${index} reverted. Error: ${item.error?.message || 'Unknown error'}`);
+      }
+    });
+    return results;
+  }, [rawStrategyDetailsResponse?.length]); 
+  
   const strategyDetailsMap = useMemo(() => {
     const map = new Map<number, { id: bigint, protocol: string, pool: Address, receiptToken: Address, active: boolean }>();
     if (rawStrategyDetailsData && rawStrategyDetailsData.length > 0) {
       rawStrategyDetailsData.forEach(sResult => {
         if (sResult && Array.isArray(sResult) && sResult.length >= 5) {
-            const [id, protocolName, pool, receiptToken, active] = sResult as [bigint, string, Address, Address, boolean];
-            map.set(Number(id), { id, protocol: protocolName, pool, receiptToken, active });
+          const [id, protocolName, pool, receiptToken, active] = sResult;
+          map.set(Number(id), { id, protocol: protocolName, pool, receiptToken, active });
         }
       });
     }
@@ -268,6 +289,14 @@ export function UserPositions() {
     connectedChainId
   );
 
+  const refetchUserPositionsCallback = useCallback(() => {
+    refetchUserPositions();
+  }, [refetchUserPositions]);
+  
+  const refetchStrategyDetailsCallback = useCallback(() => {
+    refetchStrategyDetails();
+  }, [refetchStrategyDetails]);
+
   useEffect(() => {
     if (withdrawError) {
       toast.error(`Withdrawal failed: ${withdrawError.message}`);
@@ -277,10 +306,11 @@ export function UserPositions() {
       setWithdrawAmount('');
       setSelectedPositionForWithdraw(null);
       setSelectedPositionTokenDecimals(undefined);
-      refetchUserPositions();
-      refetchStrategyDetails();
+      refetchUserPositionsCallback();
+      refetchStrategyDetailsCallback();
     }
-  }, [withdrawError, isWithdrawConfirmed, refetchUserPositions, refetchStrategyDetails]);
+  }, [withdrawError, isWithdrawConfirmed, refetchUserPositionsCallback, refetchStrategyDetailsCallback]);
+
 
   const handleWithdrawClick = useCallback((positionIndex: number, tokenSymbol: string, tokenDecimals: number) => {
     setSelectedPositionForWithdraw(positionIndex);
@@ -407,7 +437,7 @@ export function UserPositions() {
                     <div className="flex items-start space-x-3">
                       {position.token.icon && (
                         <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden">
-                            <img src={position.token.icon} alt={position.token.symbol} className="w-full h-full object-cover" />
+                            <Image src={position.token.icon} alt={position.token.symbol} className="w-full h-full object-cover" />
                         </div>
                       )}
                       {!position.token.icon && (
