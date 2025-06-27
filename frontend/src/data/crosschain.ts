@@ -1,101 +1,129 @@
 // src/data/crosschain.ts
 
 import { Address } from 'viem';
+import { sepolia, baseSepolia, arbitrumSepolia } from 'wagmi/chains'; // Import wagmi chain objects
 
+// Extend the wagmi Chain type if necessary, or define a new one that combines properties
+// Updated Chain interface - extend wagmi's Chain type properly
 export interface Chain {
-  id: string; // e.g., 'sepolia'
-  name: string; // e.g., 'Ethereum Sepolia'
-  chainId: number; // e.g., 11155111
-  selector: string; // Chainlink CCIP Chain Selector as a string (can be converted to bigint)
+  id: number; // Keep this to match wagmi's chain.id
+  name: string;
+  chainId: number;
+  selector: string;
   logo: string;
-  color: string; // Used for fallback chain icon
+  color: string;
   rpcUrl: string;
+  rpcUrls: {
+    default: { http: string[] };
+    public: { http: string[] };
+  };
   blockExplorer: string;
-  isSupported: boolean; // Is this chain supported for transfers (source/destination)
-  ccipExplorerUrl?: string; // Specific CCIP explorer URL for this chain if different
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+  isSupported: boolean;
+  isTestnet?: boolean;
+  ccipExplorerUrl?: string;
 }
 
-// USDC Contract Addresses (!!! IMPORTANT: REPLACE WITH REAL ADDRESSES FOR EACH NETWORK !!!)
-// These are placeholders. Your actual USDC contract addresses are crucial for functionality.
-// These should match the addresses you will put in src/integrations/crossChain/constants.ts
-export const USDC_CONTRACT_ADDRESSES_DATA: Record<string, Address> = {
-  sepolia: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",     // <<< REPLACE THIS
-  baseSepolia: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // <<< REPLACE THIS
-  arbitrumSepolia: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // <<< REPLACE THIS
-};
-
-
-export const SUPPORTED_CHAINS: Record<string, Chain> = {
-  sepolia: {
-    id: 'sepolia',
+// Updated SUPPORTED_CHAINS_BY_ID - manually construct objects to avoid spread conflicts
+export const SUPPORTED_CHAINS_BY_ID: Record<number, Chain> = {
+  [sepolia.id]: {
+    id: sepolia.id,
     name: 'Ethereum Sepolia',
-    chainId: 11155111,
+    chainId: sepolia.id,
     selector: '16015286601757825753',
     logo: "/images/ethereum-logo.png",
     color: '#627EEA',
-    rpcUrl: 'https://sepolia.infura.io/v3/',
-    blockExplorer: 'https://sepolia.etherscan.io',
+    rpcUrl: sepolia.rpcUrls.default.http[0],
+    rpcUrls: {
+      default: { http: [...sepolia.rpcUrls.default.http] },
+      public: { http: [...sepolia.rpcUrls.default.http] }
+    },
+    blockExplorer: sepolia.blockExplorers?.default.url || 'https://sepolia.etherscan.io',
+    nativeCurrency: sepolia.nativeCurrency,
     isSupported: true,
+    isTestnet: sepolia.testnet || false,
     ccipExplorerUrl: 'https://ccip.chain.link/msg/'
   },
-  baseSepolia: {
-    id: 'baseSepolia',
+  [baseSepolia.id]: {
+    id: baseSepolia.id,
     name: 'Base Sepolia',
-    chainId: 84532,
+    chainId: baseSepolia.id,
     selector: '10344971235874465080',
     logo: "/images/base-logo.png",
     color: '#0052FF',
-    rpcUrl: 'https://sepolia.base.org',
-    blockExplorer: 'https://sepolia-explorer.base.org',
+    rpcUrl: baseSepolia.rpcUrls.default.http[0],
+    rpcUrls: {
+      default: { http: [...baseSepolia.rpcUrls.default.http] },
+      public: { http: [...baseSepolia.rpcUrls.default.http] }
+    },
+    
+    blockExplorer: baseSepolia.blockExplorers?.default.url || 'https://sepolia-explorer.base.org',
+    nativeCurrency: baseSepolia.nativeCurrency,
     isSupported: true,
+    isTestnet: baseSepolia.testnet || false,
     ccipExplorerUrl: 'https://ccip.chain.link/msg/'
   },
-  arbitrumSepolia: {
-    id: 'arbitrumSepolia',
+  [arbitrumSepolia.id]: {
+    id: arbitrumSepolia.id,
     name: 'Arbitrum Sepolia',
-    chainId: 421614,
+    chainId: arbitrumSepolia.id,
     selector: '3478487238524512106',
     logo: "/images/arbitrum-logo.png",
     color: '#28A0F0',
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-    blockExplorer: 'https://sepolia-explorer.arbitrum.io',
+    rpcUrl: arbitrumSepolia.rpcUrls.default.http[0],
+    rpcUrls: {
+      default: { http: [...arbitrumSepolia.rpcUrls.default.http] },
+      public: { http: [...arbitrumSepolia.rpcUrls.default.http] }
+    },
+    blockExplorer: arbitrumSepolia.blockExplorers?.default.url || 'https://sepolia-explorer.arbitrum.io',
+    nativeCurrency: arbitrumSepolia.nativeCurrency,
     isSupported: true,
+    isTestnet: arbitrumSepolia.testnet || false,
     ccipExplorerUrl: 'https://ccip.chain.link/msg/'
   }
 };
-
-export const TRANSFER_ROUTES_CONFIG = {
-  'sepolia-baseSepolia': { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
-  'baseSepolia-sepolia': { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
-  'sepolia-arbitrumSepolia': { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
-  'arbitrumSepolia-sepolia': { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
-  'baseSepolia-arbitrumSepolia': { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
-  'arbitrumSepolia-baseSepolia': { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
+// USDC Contract Addresses - NOW KEYED BY NUMERICAL CHAIN ID
+export const USDC_CONTRACT_ADDRESSES_DATA: Record<number, Address> = {
+  [sepolia.id]: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+  [baseSepolia.id]: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  [arbitrumSepolia.id]: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
 };
 
-export const getTransferRoute = (fromId: string, toId: string) => {
-    const routeKey = `${fromId}-${toId}`;
-    return TRANSFER_ROUTES_CONFIG[routeKey as keyof typeof TRANSFER_ROUTES_CONFIG] || { isActive: false, estimatedTime: 'N/A', estimatedFee: 'N/A' };
+// --- Updated TRANSFER_ROUTES_CONFIG to use numerical chain IDs ---
+export const TRANSFER_ROUTES_CONFIG: Record<string, { isActive: boolean; estimatedTime: string; estimatedFee: string }> = {
+  // Sepolia (11155111) to Base Sepolia (84532)
+  [`${sepolia.id}-${baseSepolia.id}`]: { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
+  // Base Sepolia (84532) to Sepolia (11155111)
+  [`${baseSepolia.id}-${sepolia.id}`]: { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
+  // Sepolia (11155111) to Arbitrum Sepolia (421614)
+  [`${sepolia.id}-${arbitrumSepolia.id}`]: { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
+  // Arbitrum Sepolia (421614) to Sepolia (11155111)
+  [`${arbitrumSepolia.id}-${sepolia.id}`]: { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
+  // Base Sepolia (84532) to Arbitrum Sepolia (421614)
+  [`${baseSepolia.id}-${arbitrumSepolia.id}`]: { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
+  // Arbitrum Sepolia (421614) to Base Sepolia (84532)
+  [`${arbitrumSepolia.id}-${baseSepolia.id}`]: { isActive: true, estimatedTime: '5-10 minutes', estimatedFee: '0.001' },
 };
 
-// --- FIX: Redefined TransferStatus as an object interface ---
+export const getTransferRoute = (fromChainId: number, toChainId: number) => { // Updated to accept numbers
+    const routeKey = `${fromChainId}-${toChainId}`; // Key using numbers
+    return TRANSFER_ROUTES_CONFIG[routeKey] || { isActive: false, estimatedTime: 'N/A', estimatedFee: 'N/A' };
+};
+
 export interface TransferStatus {
-  // The overall status of the transfer
   status: 'idle' | 'pending' | 'confirming' | 'bridging' | 'depositing' | 'completed' | 'failed';
-  // The current step index in the TRANSFER_STEPS array
   step: number;
-  // The total number of steps
   totalSteps: number;
-  // Optional: Transaction hash from the source chain
   txHash?: string;
-  // Optional: CCIP Message ID for tracking on CCIP explorer
   ccipMessageId?: string;
-  // Optional: Error message if the transfer fails
   error?: string;
-  // Optional: A more detailed message for the current status
   message?: string;
+  isTransactionConfirmed?: boolean; // Added this property
 }
-// --- END FIX ---
 
 export const TRANSFER_STEPS = [
   'Approve USDC',
@@ -105,3 +133,4 @@ export const TRANSFER_STEPS = [
 ];
 
 export const CCIP_EXPLORER_BASE_URL = "https://ccip.chain.link/msg/";
+

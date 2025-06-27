@@ -33,9 +33,9 @@ class Web3AuthSingleton {
             chainId: "0x1", // Ethereum Mainnet
             rpcTarget: "https://rpc.ankr.com/eth",
             displayName: "Ethereum Mainnet",
-            blockExplorer: "https://etherscan.io/",
             ticker: "ETH",
             tickerName: "Ethereum",
+            // Remove blockExplorer - not supported in chainConfig
           },
         },
       })
@@ -43,10 +43,10 @@ class Web3AuthSingleton {
       // Initialize Web3Auth
       this._instance = new Web3Auth({
         clientId,
-        web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET, // or TESTNET for development
-        privateKeyProvider,
+        web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET, // or TESTNET for development
+        // Remove privateKeyProvider from here
         uiConfig: {
-          appName: "Your App Name",
+          appName: "SageFi",
           mode: "dark", // or "light"
           logoLight: "https://your-logo-url.com/logo-light.svg",
           logoDark: "https://your-logo-url.com/logo-dark.svg",
@@ -89,7 +89,7 @@ class Web3AuthSingleton {
       })
 
       // Add the adapter to Web3Auth instance
-      this._instance.configureAdapter(openloginAdapter)
+      // this._instance.addAdapter(openloginAdapter)
 
       // Initialize the Web3Auth instance
       await this._instance.init()
@@ -108,10 +108,11 @@ class Web3AuthSingleton {
     }
 
     try {
-      const web3authProvider = await this._instance.connectTo("openlogin", {
-        loginProvider,
-      })
-      return web3authProvider
+      // const web3authProvider = await this._instance.connectTo(OpenLoginAdapter.name, {
+      //   loginProvider,
+      // })
+      
+      // return web3authProvider
     } catch (error) {
       console.error("Web3Auth connection failed:", error)
       throw error

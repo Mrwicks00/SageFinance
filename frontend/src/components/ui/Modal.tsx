@@ -5,6 +5,8 @@ import { useEffect } from "react"
 import { createPortal } from "react-dom"
 import { X, ArrowLeft } from "lucide-react"
 import { cn } from "../../lib/utils"
+import Image from 'next/image';
+
 
 interface ModalProps {
   isOpen: boolean
@@ -158,7 +160,7 @@ export function WalletModal({ isOpen, onClose, onSelectWallet, wallets }: Wallet
           >
             <div className="flex items-center space-x-4">
               <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center group-hover:bg-yellow-100 transition-colors">
-                <img 
+                <Image 
                   src={wallet.icon} 
                   alt={wallet.name}
                   className="w-8 h-8 object-contain"

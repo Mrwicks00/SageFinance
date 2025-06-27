@@ -2,18 +2,18 @@
 
 import React from 'react'
 import { Chain } from '@/data/crosschain'
+import Image from 'next/image';
+
 
 interface ChainSelectorProps {
   chain: Chain
-  isSelected?: boolean
-  onClick?: () => void
+  onClick?: () => void // Make onClick optional as it might not always be clickable
   disabled?: boolean
   label: string
 }
 
 export const ChainSelector: React.FC<ChainSelectorProps> = ({
   chain,
-  isSelected = false,
   onClick,
   disabled = false,
   label
@@ -21,25 +21,24 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium text-gray-400">{label}</label>
-      <div 
+      <div
         className={`
-          p-4 rounded-xl border-2 cursor-pointer transition-all duration-200
-          ${disabled 
-            ? 'border-gray-600 bg-gray-800 cursor-not-allowed opacity-50' 
-            : isSelected
-              ? 'border-yellow-500 bg-gray-900 shadow-lg shadow-yellow-500/20'
-              : 'border-gray-700 bg-gray-900 hover:border-yellow-500/60'
+          p-4 rounded-xl border-2 transition-all duration-200
+          ${disabled
+            ? 'border-gray-600 bg-gray-800 cursor-not-allowed opacity-50'
+            : 'border-gray-700 bg-gray-900 hover:border-yellow-500/60 hover:bg-gray-800 cursor-pointer' // Added cursor-pointer
           }
         `}
-        onClick={!disabled ? onClick : undefined}
+        onClick={!disabled ? onClick : undefined} // Only allow click if not disabled
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            {/* Fixed: Changed from text to img tag */}
-            <img 
-              src={chain.logo} 
+            <Image
+              src={chain.logo}
               alt={chain.name}
-              className="w-8 h-8 rounded-full object-cover"
+              className=" rounded-full object-cover"
+              width={24}
+              height={24}
               onError={(e) => {
                 // Fallback: hide image and show colored circle if image fails to load
                 e.currentTarget.style.display = 'none';

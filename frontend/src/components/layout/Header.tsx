@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "../../components/ui/Button";
 import { WalletButton } from "../../components/wallet/WalletButton";
 import { Menu, X } from "lucide-react";
+import Image from "next/image";
 
 const NAVIGATION_ITEMS = [
   { label: "Features", href: "#features" },
@@ -23,10 +24,12 @@ export function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-lg flex items-center justify-center">
-              <img
-                src="images/sage-logo.png"
+              <Image
+                src="/images/sage-logo.png"
                 alt="sage-logo"
-                className="w-{40px} rounded-lg" // 64px x 64px
+                width={32}
+                height={32}
+                className="rounded-lg"
               />
             </div>
             <span className="text-white font-bold text-xl">SageFi</span>
@@ -49,7 +52,7 @@ export function Header() {
           <div className="hidden md:flex items-center space-x-4">
             <WalletButton />
             <Link href="/dashboard">
-            <Button>Launch App</Button>
+              <Button>Launch App</Button>
             </Link>
           </div>
 

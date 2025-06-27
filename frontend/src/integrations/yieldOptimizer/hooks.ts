@@ -1,12 +1,12 @@
 // src/integrations/yieldOptimizer/hooks.ts
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { Address, formatUnits, parseUnits } from 'viem';
+import { Address,  parseUnits } from 'viem';
 import { useMemo, useCallback } from 'react';
 
 // Make sure these imports are correct based on your constants.ts and ABI location
-import { YIELD_OPTIMIZER_ADDRESSES, CHAINLINK_CHAIN_SELECTORS } from './constants';
-import { YIELD_OPTIMIZER_ABI } from './constants'; // Adjust this path if your ABI is elsewhere
-
+import { YIELD_OPTIMIZER_ADDRESSES, CHAINLINK_CHAIN_SELECTORS, YIELD_OPTIMIZER_ABI } from './constants';
+// import { ERC20_ABI } from '@/integrations/erc20/hooks'; // Assuming ERC20_ABI is exported from here
+// import { toast } from 'react-toastify';
 
 
 // Hook to get a user's total balance across all strategies in the YieldOptimizer
@@ -70,6 +70,7 @@ export function useDeposit(
     isPending: isDepositLoading,
     error: depositError,
     writeContract: writeDeposit, // Renamed 'deposit' to 'writeDeposit' to avoid conflict with the returned 'write'
+    reset: resetDepositHook, // Added reset function
   } = useWriteContract();
 
   const {
@@ -144,6 +145,7 @@ export function useDeposit(
     isLoading,
     isSuccess,
     error,
+    reset: resetDepositHook, // Expose the reset function
   };
 }
 
@@ -212,6 +214,7 @@ export function useWithdraw(
     isPending: isWithdrawLoading,
     error: withdrawError,
     writeContract: writeWithdraw, // Renamed 'withdraw' to 'writeWithdraw'
+    reset: resetWithdrawHook, // Added reset function
   } = useWriteContract();
 
   const {
@@ -276,5 +279,6 @@ export function useWithdraw(
     isLoading,
     isSuccess,
     error,
+    reset: resetWithdrawHook, // Expose the reset function
   };
 }

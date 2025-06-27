@@ -1,8 +1,9 @@
 // src/integrations/erc20/hooks.ts
 
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { Address, erc20Abi } from 'viem'; // Removed maxUint256 import
-import { useMemo, useCallback } from 'react';
+import { Address, erc20Abi } from 'viem';
+import { useMemo, useCallback, useEffect } from 'react';
+import { toast } from 'react-toastify';
 
 export const ERC20_ABI = erc20Abi;
 
@@ -72,14 +73,25 @@ export function useErc20Allowance(tokenAddress?: Address, spenderAddress?: Addre
 }
 
 // Hook to approve a specified spender contract to spend a specific amount of an ERC-20 token.
-// This now takes `amountToApprove` as an argument.
 export function useApproveErc20(tokenAddress?: Address, spenderAddress?: Address, amountToApprove?: bigint) {
   const {
     data: hash,
     isPending: isApproveLoading,
     error: approveError,
     writeContract: approve,
-  } = useWriteContract();
+    reset: resetApprove,
+  } = useWriteContract({
+    mutation: {
+      onSuccess: (data) => {
+        console.log('Approval transaction submitted:', data);
+        toast.info('Approval submitted, waiting for confirmation...');
+      },
+      onError: (error) => {
+        console.error('Approval transaction failed:', error);
+        toast.error(`Approval failed: ${error.message}`);
+      },
+    },
+  });
 
   const {
     isLoading: isApproveConfirming,
@@ -92,17 +104,64 @@ export function useApproveErc20(tokenAddress?: Address, spenderAddress?: Address
     },
   });
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Approval Hook State:', {
+      hash,
+      isApproveLoading,
+      isApproveConfirming,
+      isApproveConfirmed,
+      approveError: approveError?.message,
+      approveConfirmError: approveConfirmError?.message,
+    });
+  }, [hash, isApproveLoading, isApproveConfirming, isApproveConfirmed, approveError, approveConfirmError]);
+
   const write = useCallback(() => {
-    if (tokenAddress && spenderAddress && amountToApprove !== undefined) {
-      // Approve the specific amount
+    console.log('Attempting approval with params:', {
+      approve: !!approve,
+      tokenAddress,
+      spenderAddress,
+      amountToApprove: amountToApprove?.toString(),
+    });
+
+    if (!approve) {
+      console.error('approve function is not available');
+      toast.error('Approval function not available. Please try again.');
+      return;
+    }
+
+    if (!tokenAddress) {
+      console.error('Token address is missing');
+      toast.error('Invalid token address.');
+      return;
+    }
+
+    if (!spenderAddress) {
+      console.error('Spender address is missing');
+      toast.error('Invalid spender address.');
+      return;
+    }
+
+    if (amountToApprove === undefined) {
+      console.error('Amount to approve is undefined');
+      toast.error('Invalid approval amount.');
+      return;
+    }
+
+    try {
+      console.log('Calling approve with args:', [spenderAddress, amountToApprove]);
+      
       approve({
         address: tokenAddress,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [spenderAddress, amountToApprove],
       });
+    } catch (error) {
+      console.error('Error calling approve:', error);
+      toast.error('Failed to submit approval. Please try again.');
     }
-  }, [tokenAddress, spenderAddress, amountToApprove, approve]); // Added amountToApprove to dependencies
+  }, [tokenAddress, spenderAddress, amountToApprove, approve]);
 
   const error = useMemo(() => approveError || approveConfirmError, [approveError, approveConfirmError]);
 
@@ -112,5 +171,32 @@ export function useApproveErc20(tokenAddress?: Address, spenderAddress?: Address
     isLoading: isApproveLoading || isApproveConfirming,
     isSuccess: isApproveConfirmed,
     error,
+    reset: resetApprove,
   };
+}
+
+// Specific hook for Yield Optimizer approvals (keeps your current logic)
+export function useApproveErc20ForYieldOptimizer(tokenAddress?: Address, amountToApprove?: bigint, chainId?: number) {
+  const YIELD_OPTIMIZER_ADDRESSES: Record<number, `0x${string}`> = {
+    11155111: "0x543aeA3ad17fE0a4cfc8546f958d15BB2828e68B", // Sepolia
+    84532: "0x2fE627AD81358FC3a8ccC197869ad347E487c3C0",   // Base Sepolia
+    421614: "0xA939e5f884f46a281Eac2c438a7337b890644b8C",   // Arbitrum Sepolia
+  };
+  
+  const spenderAddress = chainId ? YIELD_OPTIMIZER_ADDRESSES[chainId] : undefined;
+
+  return useApproveErc20(tokenAddress, spenderAddress, amountToApprove);
+}
+
+// Specific hook for Yield Optimizer allowance (keeps your current logic)
+export function useErc20AllowanceForYieldOptimizer(tokenAddress?: Address, chainId?: number) {
+  const YIELD_OPTIMIZER_ADDRESSES: Record<number, `0x${string}`> = {
+    11155111: "0x543aeA3ad17fE0a4cfc8546f958d15BB2828e68B", // Sepolia
+    84532: "0x2fE627AD81358FC3a8ccC197869ad347E487c3C0",   // Base Sepolia
+    421614: "0xA939e5f884f46a281Eac2c438a7337b890644b8C",   // Arbitrum Sepolia
+  };
+  
+  const spenderAddress = chainId ? YIELD_OPTIMIZER_ADDRESSES[chainId] : undefined;
+
+  return useErc20Allowance(tokenAddress, spenderAddress);
 }

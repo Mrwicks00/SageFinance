@@ -1,25 +1,13 @@
-import { sepolia, baseSepolia, arbitrumSepolia } from "wagmi/chains"
+// src/constants/networks.ts
 
-export const SUPPORTED_NETWORKS = [sepolia, baseSepolia, arbitrumSepolia]
+// This file is being simplified as network configurations are now primarily
+// managed in src/data/crosschain.ts for a single source of truth.
 
-export const getChainById = (chainId: number) => {
-  return SUPPORTED_NETWORKS.find(chain => chain.id === chainId)
-}
+// You can re-export the wagmi chains if needed by other parts of your app
+import { sepolia, baseSepolia, arbitrumSepolia } from "wagmi/chains";
 
-export const NETWORK_CONFIGS = {
-  [sepolia.id]: {
-    name: "Ethereum Sepolia",
-    color: "#627EEA",
-    icon: "images/ethereum-logo.png",
-  },
-  [baseSepolia.id]: {
-    name: "Base Sepolia",
-    color: "#0052FF",
-    icon: "images/base-logo.png",
-  },
-  [arbitrumSepolia.id]: {
-    name: "Arbitrum Sepolia",
-    color: "#28A0F0",
-    icon: "images/arbitrum-logo.png",
-  },
-}
+export const SUPPORTED_NETWORKS = [sepolia, baseSepolia, arbitrumSepolia];
+
+// All other detailed network configurations should now come from src/data/crosschain.ts
+// Remove NETWORK_CONFIGS and getChainById if no longer used directly outside WalletContext
+// or if WalletContext is updated to use SUPPORTED_CHAINS_BY_ID.

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { mockPortfolio } from "../../data/mockData";
 import { TrendingUp, TrendingDown, DollarSign, PieChart } from "lucide-react";
 
@@ -59,10 +60,12 @@ export function PortfolioOverview() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-gradient-to-br from-yellow-400/20 to-yellow-600/20 rounded-full flex items-center justify-center border overflow-hidden">
-                    <img
+                    <Image
                       src={asset.logo}
                       alt="USDC"
-                      className="w-full h-full object-contain"
+                      className=" object-contain"
+                      width={24}
+                      height={24}
                     />
                   </div>
 

@@ -1,6 +1,6 @@
 // services/walletDataService.ts
 import { formatUnits } from 'viem'
-import { useWalletData } from "@/hooks/useWalletData"
+// import { useWalletData } from "@/hooks/useWalletData"
 
 export interface TokenHolding {
   symbol: string
@@ -78,11 +78,11 @@ class WalletDataService {
 
       // Filter out zero balances and get token metadata
       const nonZeroBalances = tokenBalances.filter(
-        (token: any) => parseInt(token.tokenBalance, 16) > 0
+        (token: { tokenBalance: string }) => parseInt(token.tokenBalance, 16) > 0
       )
 
       const tokensWithMetadata = await Promise.all(
-        nonZeroBalances.map(async (token: any) => {
+        nonZeroBalances.map(async (token: { contractAddress: string; tokenBalance: string }) => {
           const metadata = await this.getTokenMetadata(token.contractAddress, chainId)
           const balance = formatUnits(BigInt(token.tokenBalance), metadata.decimals)
           
@@ -123,7 +123,7 @@ class WalletDataService {
 
       const data = await response.json()
       
-      return data.map((token: any) => ({
+      return data.map((token: { symbol: string; name: string; balance: string; decimals: number; token_address: string; logo?: string; usd_value?: number }) => ({
         symbol: token.symbol,
         name: token.name,
         balance: formatUnits(BigInt(token.balance), token.decimals),
