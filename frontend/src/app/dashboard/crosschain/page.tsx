@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { ArrowLeft, AlertTriangle, Wallet, ArrowUpDown } from "lucide-react"
+import { ArrowLeft, AlertTriangle, Wallet, ArrowUpDown, ExternalLink, Coins } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "react-toastify"
 import { formatUnits, parseUnits } from "viem"
@@ -503,6 +503,34 @@ export default function CrossChainPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {/* USDC Faucet Banner */}
+        <div className="mb-6 p-4 sm:p-6 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/50 rounded-2xl backdrop-blur-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-xl flex items-center justify-center border border-blue-500/30 flex-shrink-0">
+                <Coins className="w-6 h-6 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-blue-400 font-semibold text-base sm:text-lg mb-2">Need Testnet USDC?</h3>
+                <p className="text-gray-300 text-sm leading-relaxed">
+                  Get free testnet USDC for Sepolia, Base Sepolia, and Arbitrum Sepolia to test cross-chain transfers
+                  and yield farming.
+                </p>
+              </div>
+            </div>
+            <a
+              href="https://faucet.circle.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-2 px-4 sm:px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-xl transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 whitespace-nowrap"
+            >
+              <Coins className="w-4 h-4" />
+              <span>Get USDC</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
+
         {/* Alert Messages */}
         {!isConnected && (
           <div className="mb-6 p-4 sm:p-6 bg-gradient-to-r from-yellow-900/30 to-yellow-800/30 border border-yellow-700/50 rounded-2xl backdrop-blur-sm">
