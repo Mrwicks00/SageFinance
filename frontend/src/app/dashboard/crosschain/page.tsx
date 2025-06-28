@@ -1,139 +1,130 @@
-// src/app/dashboard/crosschain/page.tsx
-
 "use client"
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { ArrowLeft, AlertTriangle, Wallet, ArrowUpDown } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { toast } from 'react-toastify'
-import { formatUnits, parseUnits } from 'viem'
-
-import { useWallet } from '@/contexts/WalletContext' // This hook provides all necessary wallet info
-import { ChainSelector } from '@/components/crosschain/ChainSelector'
-import { TransferForm } from '@/components/crosschain/TransferForm'
-import { TransferSummary } from '@/components/crosschain/TransferSummary'
-import { TransferStatus as TransferStatusComponent } from '@/components/crosschain/TransferStatus'
-import { ChainSelectionModal } from '@/components/crosschain/ChainSelectorModal'; // Corrected import path for ChainSelectionModal
-
-
+import { useState, useEffect, useMemo, useCallback } from "react"
+import { ArrowLeft, AlertTriangle, Wallet, ArrowUpDown } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { toast } from "react-toastify"
+import { formatUnits, parseUnits } from "viem"
+import { useWallet } from "@/contexts/WalletContext"
+import { ChainSelector } from "@/components/crosschain/ChainSelector"
+import { TransferForm } from "@/components/crosschain/TransferForm"
+import { TransferSummary } from "@/components/crosschain/TransferSummary"
+import { TransferStatus as TransferStatusComponent } from "@/components/crosschain/TransferStatus"
+import { ChainSelectionModal } from "@/components/crosschain/ChainSelectorModal"
 import {
-  SUPPORTED_CHAINS_BY_ID, // Use the new unified chain data, keyed by ID
+  SUPPORTED_CHAINS_BY_ID,
   getTransferRoute,
-  TransferStatus as TransferStatusType,
+  type TransferStatus as TransferStatusType,
   TRANSFER_STEPS,
   CCIP_EXPLORER_BASE_URL,
   USDC_CONTRACT_ADDRESSES_DATA,
-  Chain // Import Chain interface
-} from '@/data/crosschain'
-
-import { useGetTransferFee, useTransferCrossChain } from '@/integrations/crosschain/hooks'
-import { CROSS_CHAIN_MANAGER_ADDRESSES } from '@/integrations/crosschain/constants'
-
-import { useErc20Balance, useErc20Allowance, useApproveErc20, useErc20Decimals } from '@/integrations/erc20/hooks'
-
-
-
+  type Chain,
+} from "@/data/crosschain"
+import { useGetTransferFee, useTransferCrossChain } from "@/integrations/crosschain/hooks"
+import { CROSS_CHAIN_MANAGER_ADDRESSES } from "@/integrations/crosschain/constants"
+import { useErc20Balance, useErc20Allowance, useApproveErc20, useErc20Decimals } from "@/integrations/erc20/hooks"
 
 export default function CrossChainPage() {
-
   // Helper function to safely extract error message
-const getErrorMessage = (error: unknown): string => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const errorObj = error as ErrorWithMessage;
-    return errorObj.shortMessage || errorObj.message || 'Unknown error';
+  const getErrorMessage = (error: unknown): string => {
+    if (error && typeof error === "object" && "message" in error) {
+      const errorObj = error as ErrorWithMessage
+      return errorObj.shortMessage || errorObj.message || "Unknown error"
+    }
+    return "Unknown error"
   }
-  return 'Unknown error';
-};
+
   const router = useRouter()
+
   // Destructure relevant values from useWallet
   const {
     address: userAddress,
     isConnected,
     currentChainId,
-    switchNetwork, // Now comes from WalletContext
+    switchNetwork,
     isWrongNetwork,
     switchToSupportedNetwork,
-    supportedNetworksList // Access the list of supported networks from context
+    supportedNetworksList,
   } = useWallet()
 
   interface ErrorWithMessage {
-    message?: string;
-    shortMessage?: string;
+    message?: string
+    shortMessage?: string
   }
 
-
   // Initialize fromChain and toChain using the new SUPPORTED_CHAINS_BY_ID
-  // Ensure they are valid defaults from your unified list
-  const [fromChain, setFromChain] = useState<Chain>(SUPPORTED_CHAINS_BY_ID[11155111] || supportedNetworksList[0]) // Default to Sepolia or first available
-  const [toChain, setToChain] = useState<Chain>(SUPPORTED_CHAINS_BY_ID[84532] || supportedNetworksList[1] || supportedNetworksList[0]) // Default to Base Sepolia or second/first available
+  const [fromChain, setFromChain] = useState<Chain>(SUPPORTED_CHAINS_BY_ID[11155111] || supportedNetworksList[0])
+  const [toChain, setToChain] = useState<Chain>(
+    SUPPORTED_CHAINS_BY_ID[84532] || supportedNetworksList[1] || supportedNetworksList[0],
+  )
+  const [amount, setAmount] = useState("")
 
-
-  const [amount, setAmount] = useState('')
-  
   // Updated transfer status state to match the new structure
-  const [transferStatus, setTransferStatus] = useState<TransferStatusType>({ // Use the imported TransferStatusType
-    status: 'idle',
+  const [transferStatus, setTransferStatus] = useState<TransferStatusType>({
+    status: "idle",
     step: 0,
-    totalSteps: TRANSFER_STEPS.length
+    totalSteps: TRANSFER_STEPS.length,
   })
-  
+
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [shouldContinueAfterApproval, setShouldContinueAfterApproval] = useState(false)
 
   // New states for controlling chain selection modals
-  const [showFromChainModal, setShowFromChainModal] = useState(false);
-  const [showToChainModal, setShowToChainModal] = useState(false);
-
+  const [showFromChainModal, setShowFromChainModal] = useState(false)
+  const [showToChainModal, setShowToChainModal] = useState(false)
 
   // Dynamically get USDC addresses and CrossChainManager address based on selected chains
-  // USDC_CONTRACT_ADDRESSES_DATA is now keyed by number
   const fromChainUSDCAddress = fromChain ? USDC_CONTRACT_ADDRESSES_DATA[fromChain.chainId] : undefined
-  // const toChainUSDCAddress = toChain ? USDC_CONTRACT_ADDRESSES_DATA[toChain.chainId] : undefined
-
   const currentChainManagerAddress = fromChain ? CROSS_CHAIN_MANAGER_ADDRESSES[fromChain.chainId] : undefined
 
   // --- Real-time Data Fetching ---
-  const { balance: userUSDCBalanceRaw, isLoading: isLoadingUSDCBalance, refetch: refetchUSDCBalance } = useErc20Balance(fromChainUSDCAddress)
+  const {
+    balance: userUSDCBalanceRaw,
+    isLoading: isLoadingUSDCBalance,
+    refetch: refetchUSDCBalance,
+  } = useErc20Balance(fromChainUSDCAddress)
   const { decimals: usdcDecimals, isLoading: isLoadingUsdcDecimals } = useErc20Decimals(fromChainUSDCAddress)
 
   const userUSDCBalanceFormatted = useMemo(() => {
-    if (userUSDCBalanceRaw === undefined || usdcDecimals === undefined) return '0.00';
-    return Number(formatUnits(userUSDCBalanceRaw, usdcDecimals)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }, [userUSDCBalanceRaw, usdcDecimals]);
+    if (userUSDCBalanceRaw === undefined || usdcDecimals === undefined) return "0.00"
+    return Number(formatUnits(userUSDCBalanceRaw, usdcDecimals)).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  }, [userUSDCBalanceRaw, usdcDecimals])
 
-  const { allowance: usdcAllowance, isLoading: isLoadingAllowance, refetch: refetchAllowance } = useErc20Allowance(
-    fromChainUSDCAddress,
-    currentChainManagerAddress
-  );
+  const {
+    allowance: usdcAllowance,
+    isLoading: isLoadingAllowance,
+    refetch: refetchAllowance,
+  } = useErc20Allowance(fromChainUSDCAddress, currentChainManagerAddress)
 
-  const { fee: estimatedFeeFormatted, feeRaw: estimatedFeeRaw, isLoading: isLoadingFee, error: feeError, refetch: refetchFee } = useGetTransferFee(
-    amount,
-    toChain?.chainId,
-    fromChain.chainId,
-    userAddress || '0x',
-  );
+  const {
+    fee: estimatedFeeFormatted,
+    feeRaw: estimatedFeeRaw,
+    isLoading: isLoadingFee,
+    error: feeError,
+    refetch: refetchFee,
+  } = useGetTransferFee(amount, toChain?.chainId, fromChain.chainId, userAddress || "0x")
 
   // --- Contract Interactions ---
   const parsedAmount = useMemo(() => {
-    if (!amount || parseFloat(amount) <= 0 || usdcDecimals === undefined || isNaN(parseFloat(amount))) return 0n;
+    if (!amount || Number.parseFloat(amount) <= 0 || usdcDecimals === undefined || isNaN(Number.parseFloat(amount)))
+      return 0n
     try {
-      return parseUnits(amount, usdcDecimals);
+      return parseUnits(amount, usdcDecimals)
     } catch {
-      return 0n;
+      return 0n
     }
-  }, [amount, usdcDecimals]);
+  }, [amount, usdcDecimals])
 
   const {
     write: approveUSDC,
     isLoading: isApproving,
     isSuccess: isApproved,
     error: approveError,
-    reset: resetApprove
-  } = useApproveErc20(
-    fromChainUSDCAddress,
-    currentChainManagerAddress,
-    parsedAmount
-  );
+    reset: resetApprove,
+  } = useApproveErc20(fromChainUSDCAddress, currentChainManagerAddress, parsedAmount)
 
   const {
     write: transferCrossChain,
@@ -143,31 +134,23 @@ const getErrorMessage = (error: unknown): string => {
     isSuccess: isTransferConfirmed,
     isError: isTransferError,
     error: transferHookError,
-  } = useTransferCrossChain(
-    amount,
-    toChain?.chainId,
-    userAddress || '0x'
-  );
-
+  } = useTransferCrossChain(amount, toChain?.chainId, userAddress || "0x")
 
   // --- Derived States and Callbacks ---
-
   const isCorrectFromNetwork = useMemo(() => {
-    return isConnected && currentChainId === fromChain.chainId;
-  }, [isConnected, currentChainId, fromChain]);
+    return isConnected && currentChainId === fromChain.chainId
+  }, [isConnected, currentChainId, fromChain])
 
-  // getTransferRoute now expects numbers, not string IDs
-  const currentRoute = getTransferRoute(fromChain.chainId, toChain.chainId);
+  const currentRoute = getTransferRoute(fromChain.chainId, toChain.chainId)
 
   const isApprovalNeeded = useMemo(() => {
-    if (!isConnected || !isCorrectFromNetwork || !currentRoute.isActive || parsedAmount === 0n) return false;
-    return usdcAllowance === undefined || usdcAllowance < parsedAmount;
-  }, [isConnected, isCorrectFromNetwork, currentRoute, parsedAmount, usdcAllowance]);
+    if (!isConnected || !isCorrectFromNetwork || !currentRoute.isActive || parsedAmount === 0n) return false
+    return usdcAllowance === undefined || usdcAllowance < parsedAmount
+  }, [isConnected, isCorrectFromNetwork, currentRoute, parsedAmount, usdcAllowance])
 
   const canTransfer = useMemo(() => {
-    const userBalanceNum = parseFloat(userUSDCBalanceFormatted);
-    const amountNum = parseFloat(amount);
-
+    const userBalanceNum = Number.parseFloat(userUSDCBalanceFormatted)
+    const amountNum = Number.parseFloat(amount)
     return (
       isConnected &&
       isCorrectFromNetwork &&
@@ -176,186 +159,235 @@ const getErrorMessage = (error: unknown): string => {
       amountNum <= userBalanceNum &&
       !isLoadingFee &&
       !feeError &&
-      !!estimatedFeeRaw && estimatedFeeRaw > 0n &&
+      !!estimatedFeeRaw &&
+      estimatedFeeRaw > 0n &&
       !isApprovalNeeded
-    );
-  }, [isConnected, isCorrectFromNetwork, currentRoute, amount, userUSDCBalanceFormatted, isLoadingFee, feeError, estimatedFeeRaw, isApprovalNeeded]);
+    )
+  }, [
+    isConnected,
+    isCorrectFromNetwork,
+    currentRoute,
+    amount,
+    userUSDCBalanceFormatted,
+    isLoadingFee,
+    feeError,
+    estimatedFeeRaw,
+    isApprovalNeeded,
+  ])
 
   const handleSwapChains = useCallback(() => {
-    const tempFromChain = fromChain;
-    setFromChain(toChain);
-    setToChain(tempFromChain);
-    setAmount('');
-  }, [fromChain, toChain]);
+    const tempFromChain = fromChain
+    setFromChain(toChain)
+    setToChain(tempFromChain)
+    setAmount("")
+  }, [fromChain, toChain])
 
   const performTransfer = useCallback(async () => {
     if (canTransfer) {
-      setTransferStatus(prev => ({ 
-        ...prev, 
-        status: 'pending', 
-        step: 1, 
-        message: 'Initiating cross-chain transfer transaction...' 
-      }));
-      console.log("Initiating cross-chain transfer for amount:", formatUnits(parsedAmount, usdcDecimals || 6));
-      transferCrossChain?.();
+      setTransferStatus((prev) => ({
+        ...prev,
+        status: "pending",
+        step: 1,
+        message: "Initiating cross-chain transfer transaction...",
+      }))
+      console.log("Initiating cross-chain transfer for amount:", formatUnits(parsedAmount, usdcDecimals || 6))
+      transferCrossChain?.()
     } else {
-      let errorMessage = "Cannot proceed with transfer. Please ensure all conditions are met.";
-      if (!isConnected) errorMessage = "Wallet not connected.";
-      else if (!isCorrectFromNetwork) errorMessage = "Wallet on wrong network.";
-      else if (!currentRoute.isActive) errorMessage = "Selected bridge route is not active.";
-      else if (parseFloat(amount) === 0) errorMessage = "Please enter an amount to transfer.";
-      else if (parseFloat(amount) > parseFloat(userUSDCBalanceFormatted)) errorMessage = "Insufficient USDC balance for transfer.";
-      else if (isApprovalNeeded) errorMessage = "Allowance insufficient. Please approve USDC first.";
+      let errorMessage = "Cannot proceed with transfer. Please ensure all conditions are met."
+      if (!isConnected) errorMessage = "Wallet not connected."
+      else if (!isCorrectFromNetwork) errorMessage = "Wallet on wrong network."
+      else if (!currentRoute.isActive) errorMessage = "Selected bridge route is not active."
+      else if (Number.parseFloat(amount) === 0) errorMessage = "Please enter an amount to transfer."
+      else if (Number.parseFloat(amount) > Number.parseFloat(userUSDCBalanceFormatted))
+        errorMessage = "Insufficient USDC balance for transfer."
+      else if (isApprovalNeeded) errorMessage = "Allowance insufficient. Please approve USDC first."
       else if (isLoadingFee || feeError || !estimatedFeeRaw || estimatedFeeRaw === 0n) {
-          errorMessage = "Failed to estimate bridge fee. Please ensure a valid amount is entered and try again.";
+        errorMessage = "Failed to estimate bridge fee. Please ensure a valid amount is entered and try again."
       }
-
-      toast.error(errorMessage);
-      setTransferStatus(prev => ({ ...prev, status: 'failed', error: errorMessage }));
+      toast.error(errorMessage)
+      setTransferStatus((prev) => ({ ...prev, status: "failed", error: errorMessage }))
     }
-  }, [canTransfer, parsedAmount, usdcDecimals, transferCrossChain, isConnected, isCorrectFromNetwork, currentRoute, amount, userUSDCBalanceFormatted, isApprovalNeeded, isLoadingFee, feeError, estimatedFeeRaw]);
+  }, [
+    canTransfer,
+    parsedAmount,
+    usdcDecimals,
+    transferCrossChain,
+    isConnected,
+    isCorrectFromNetwork,
+    currentRoute,
+    amount,
+    userUSDCBalanceFormatted,
+    isApprovalNeeded,
+    isLoadingFee,
+    feeError,
+    estimatedFeeRaw,
+  ])
 
   const handleTransfer = useCallback(async () => {
     if (isApproving || isTransferring || showStatusModal) {
-        console.warn("Transfer process already active or modal is showing. Aborting handleTransfer re-entry.");
-        return;
+      console.warn("Transfer process already active or modal is showing. Aborting handleTransfer re-entry.")
+      return
     }
 
-    // Reset any previous hook states
-    resetApprove?.();
-    
-
-    setShowStatusModal(true);
+    resetApprove?.()
+    setShowStatusModal(true)
     setTransferStatus({
-      status: 'pending',
+      status: "pending",
       step: 0,
-      totalSteps: TRANSFER_STEPS.length
-    });
+      totalSteps: TRANSFER_STEPS.length,
+    })
 
     try {
       if (!isCorrectFromNetwork) {
-        setTransferStatus(prev => ({ 
-          ...prev, 
-          status: 'confirming', 
-          step: -1, 
-          error: 'Please switch to the correct network' 
-        }));
+        setTransferStatus((prev) => ({
+          ...prev,
+          status: "confirming",
+          step: -1,
+          error: "Please switch to the correct network",
+        }))
         try {
-          await switchNetwork(fromChain.chainId); // Use switchNetwork from WalletContext
-          toast.success(`Switched to ${fromChain.name}. Please try the transfer again.`);
-          setShowStatusModal(false);
+          await switchNetwork(fromChain.chainId)
+          toast.success(`Switched to ${fromChain.name}. Please try the transfer again.`)
+          setShowStatusModal(false)
           setTransferStatus({
-            status: 'idle',
+            status: "idle",
             step: 0,
-            totalSteps: TRANSFER_STEPS.length
-          });
-          return;
-        } catch (switchError: unknown) {
-          const errMsg = getErrorMessage(switchError) || 'Failed to switch network.';
-          toast.error(`Switch network failed: ${errMsg}`);
-          setTransferStatus(prev => ({ ...prev, status: 'failed', error: errMsg }));
-          return;
+            totalSteps: TRANSFER_STEPS.length,
+          })
+          return
+        } catch (switchError) {
+          const errMsg = getErrorMessage(switchError) || "Failed to switch network."
+          toast.error(`Switch network failed: ${errMsg}`)
+          setTransferStatus((prev) => ({ ...prev, status: "failed", error: errMsg }))
+          return
         }
       }
 
       if (isApprovalNeeded) {
-        setTransferStatus(prev => ({ 
-          ...prev, 
-          status: 'confirming', 
-          step: 0, 
-          message: 'Awaiting USDC approval transaction...' 
-        }));
-        console.log("Initiating USDC approval for amount:", formatUnits(parsedAmount, usdcDecimals || 6));
-        setShouldContinueAfterApproval(true);
-        approveUSDC?.();
-        return;
+        setTransferStatus((prev) => ({
+          ...prev,
+          status: "confirming",
+          step: 0,
+          message: "Awaiting USDC approval transaction...",
+        }))
+        console.log("Initiating USDC approval for amount:", formatUnits(parsedAmount, usdcDecimals || 6))
+        setShouldContinueAfterApproval(true)
+        approveUSDC?.()
+        return
       }
 
-      await performTransfer();
-
-    } catch (error: unknown) {
-      console.error("Critical error in handleTransfer:", error);
-      const errorMsg = getErrorMessage(error);
-      toast.error(`A critical error occurred during transfer: ${errorMsg}`);
-      setTransferStatus(prev => ({
+      await performTransfer()
+    } catch (error) {
+      console.error("Critical error in handleTransfer:", error)
+      const errorMsg = getErrorMessage(error)
+      toast.error(`A critical error occurred during transfer: ${errorMsg}`)
+      setTransferStatus((prev) => ({
         ...prev,
-        status: 'failed',
-        error: errorMsg
-      }));
+        status: "failed",
+        error: errorMsg,
+      }))
     }
   }, [
-    isApproving, isTransferring, showStatusModal,
-    isCorrectFromNetwork, fromChain, switchNetwork,
-    isApprovalNeeded, approveUSDC, parsedAmount, usdcDecimals,
-    performTransfer, resetApprove, getErrorMessage
-  ]);
+    isApproving,
+    isTransferring,
+    showStatusModal,
+    isCorrectFromNetwork,
+    fromChain,
+    switchNetwork,
+    isApprovalNeeded,
+    approveUSDC,
+    parsedAmount,
+    usdcDecimals,
+    performTransfer,
+    resetApprove,
+  ])
 
   // Handle approval success
   useEffect(() => {
-    if (isApproved && shouldContinueAfterApproval && transferStatus.status === 'confirming' && transferStatus.step === 0) {
-      console.log("USDC Approved! Proceeding with transfer...");
-      setShouldContinueAfterApproval(false);
-
-      // Refetch data after approval
-      refetchAllowance();
-      refetchUSDCBalance();
-      refetchFee();
-
-      // Small delay to ensure state updates
+    if (
+      isApproved &&
+      shouldContinueAfterApproval &&
+      transferStatus.status === "confirming" &&
+      transferStatus.step === 0
+    ) {
+      console.log("USDC Approved! Proceeding with transfer...")
+      setShouldContinueAfterApproval(false)
+      refetchAllowance()
+      refetchUSDCBalance()
+      refetchFee()
       setTimeout(async () => {
-        await performTransfer();
-      }, 1000);
+        await performTransfer()
+      }, 1000)
     }
-  }, [isApproved, shouldContinueAfterApproval, transferStatus.status, transferStatus.step, refetchAllowance, refetchUSDCBalance, refetchFee, performTransfer]);
+  }, [
+    isApproved,
+    shouldContinueAfterApproval,
+    transferStatus.status,
+    transferStatus.step,
+    refetchAllowance,
+    refetchUSDCBalance,
+    refetchFee,
+    performTransfer,
+  ])
 
   // Handle approval error
   useEffect(() => {
     if (approveError && shouldContinueAfterApproval) {
-      const errMsg = getErrorMessage(approveError);
-      console.error("USDC Approval failed:", errMsg);
-      toast.error(`USDC Approval failed: ${errMsg}`);
-      setTransferStatus(prev => ({ ...prev, status: 'failed', error: errMsg }));
-      setShouldContinueAfterApproval(false);
+      const errMsg = getErrorMessage(approveError)
+      console.error("USDC Approval failed:", errMsg)
+      toast.error(`USDC Approval failed: ${errMsg}`)
+      setTransferStatus((prev) => ({ ...prev, status: "failed", error: errMsg }))
+      setShouldContinueAfterApproval(false)
     }
-  }, [approveError, shouldContinueAfterApproval, getErrorMessage]);
+  }, [approveError, shouldContinueAfterApproval])
 
   // Handle transfer transaction states
   useEffect(() => {
-    // Transaction is being processed
-    if (isTransferring && transferStatus.status !== 'bridging' && transferStatus.status !== 'completed' && transferStatus.status !== 'pending') {
-      setTransferStatus(prev => ({ 
-        ...prev, 
-        status: 'pending', 
-        step: 1, 
-        message: 'Sending transfer transaction...' 
-      }));
-    }
-  
-    // Transaction hash received (transaction submitted)
-    if (transferTxHash && transferStatus.status !== 'bridging' && transferStatus.status !== 'completed' && transferStatus.status !== 'confirming') {
-      setTransferStatus(prev => ({
+    if (
+      isTransferring &&
+      transferStatus.status !== "bridging" &&
+      transferStatus.status !== "completed" &&
+      transferStatus.status !== "pending"
+    ) {
+      setTransferStatus((prev) => ({
         ...prev,
-        status: 'confirming',
+        status: "pending",
+        step: 1,
+        message: "Sending transfer transaction...",
+      }))
+    }
+
+    if (
+      transferTxHash &&
+      transferStatus.status !== "bridging" &&
+      transferStatus.status !== "completed" &&
+      transferStatus.status !== "confirming"
+    ) {
+      setTransferStatus((prev) => ({
+        ...prev,
+        status: "confirming",
         step: 1,
         txHash: transferTxHash,
-        message: `Transaction submitted. Waiting for confirmation...`
-      }));
-      
-      console.log(`Transfer transaction submitted: ${transferTxHash}`);
+        message: `Transaction submitted. Waiting for confirmation...`,
+      }))
+      console.log(`Transfer transaction submitted: ${transferTxHash}`)
     }
-  
-    // Transaction confirmed and CCIP message ID received
-    if (isTransferConfirmed && ccipMessageId && transferStatus.status !== 'completed' && transferStatus.status !== 'bridging') {
-      setTransferStatus(prev => ({
+
+    if (
+      isTransferConfirmed &&
+      ccipMessageId &&
+      transferStatus.status !== "completed" &&
+      transferStatus.status !== "bridging"
+    ) {
+      setTransferStatus((prev) => ({
         ...prev,
-        status: 'bridging',
+        status: "bridging",
         step: 2,
         ccipMessageId: ccipMessageId,
         isTransactionConfirmed: true,
-        message: 'Source transaction confirmed. Cross-chain bridge in progress...'
-      }));
-      
-      console.log(`CCIP Message ID: ${ccipMessageId}`);
+        message: "Source transaction confirmed. Cross-chain bridge in progress...",
+      }))
+      console.log(`CCIP Message ID: ${ccipMessageId}`)
       toast.success(
         <div>
           Transaction confirmed! Cross-chain bridge started.&nbsp;
@@ -368,113 +400,118 @@ const getErrorMessage = (error: unknown): string => {
             Track on CCIP Explorer
           </a>
         </div>,
-        { autoClose: 8000 }
-      );
-  
-      refetchUSDCBalance();
-      refetchAllowance();
-      refetchFee();
+        { autoClose: 8000 },
+      )
+      refetchUSDCBalance()
+      refetchAllowance()
+      refetchFee()
     }
-  
-    // Handle transfer errors
-    if (isTransferError && transferHookError && transferStatus.status !== 'failed') {
-      let errorMessage = getErrorMessage(transferHookError);
-      
+
+    if (isTransferError && transferHookError && transferStatus.status !== "failed") {
+      let errorMessage = getErrorMessage(transferHookError)
       if (errorMessage.includes("ERC20: transfer amount exceeds allowance")) {
-        errorMessage = "Transfer failed: Insufficient USDC allowance. Please try approving again.";
-        toast.error(errorMessage);
+        errorMessage = "Transfer failed: Insufficient USDC allowance. Please try approving again."
+        toast.error(errorMessage)
         setTransferStatus({
-          status: 'idle',
+          status: "idle",
           step: 0,
-          totalSteps: TRANSFER_STEPS.length
-        });
-        setShowStatusModal(false);
-        setShouldContinueAfterApproval(false);
-        return;
+          totalSteps: TRANSFER_STEPS.length,
+        })
+        setShowStatusModal(false)
+        setShouldContinueAfterApproval(false)
+        return
       }
-  
-      console.error("Transfer failed:", errorMessage);
-      toast.error(`Transfer failed: ${errorMessage}`);
-      setTransferStatus(prev => ({
+      console.error("Transfer failed:", errorMessage)
+      toast.error(`Transfer failed: ${errorMessage}`)
+      setTransferStatus((prev) => ({
         ...prev,
-        status: 'failed',
-        error: errorMessage
-      }));
+        status: "failed",
+        error: errorMessage,
+      }))
     }
   }, [
-    isTransferring, 
-    transferTxHash, 
-    isTransferConfirmed, 
-    ccipMessageId, 
-    isTransferError, 
+    isTransferring,
+    transferTxHash,
+    isTransferConfirmed,
+    ccipMessageId,
+    isTransferError,
     transferHookError,
-    // Remove transferStatus.status from dependencies to prevent infinite loop
     refetchUSDCBalance,
     refetchAllowance,
     refetchFee,
-    getErrorMessage
-  ]);
+  ])
 
-  
   const handleCloseStatusModal = useCallback(() => {
-    setShowStatusModal(false);
+    setShowStatusModal(false)
     setTransferStatus({
-      status: 'idle',
+      status: "idle",
       step: 0,
-      totalSteps: TRANSFER_STEPS.length
-    });
-    setShouldContinueAfterApproval(false);
-    
-    // Only clear amount if transfer was completed or failed
-    if (transferStatus.status === 'completed' || transferStatus.status === 'failed') {
-      setAmount('');
+      totalSteps: TRANSFER_STEPS.length,
+    })
+    setShouldContinueAfterApproval(false)
+    if (transferStatus.status === "completed" || transferStatus.status === "failed") {
+      setAmount("")
     }
-  }, [transferStatus.status]); // Dependency on transferStatus.status to react to its changes
+  }, [transferStatus.status])
 
-  const totalLoading = isLoadingUSDCBalance || isLoadingAllowance || isLoadingFee || isApproving || isTransferring || isLoadingUsdcDecimals;
+  const totalLoading =
+    isLoadingUSDCBalance || isLoadingAllowance || isLoadingFee || isApproving || isTransferring || isLoadingUsdcDecimals
 
   const getButtonState = useMemo(() => {
-    if (totalLoading) return { text: 'Loading Data...', disabled: true };
-    if (!isConnected) return { text: 'Connect Wallet', disabled: false };
-    if (isWrongNetwork) return { text: 'Switch Network', disabled: false };
-    if (!isCorrectFromNetwork) return { text: `Switch to ${fromChain.name}`, disabled: false };
-    if (isApprovalNeeded) return { text: `Approve USDC`, disabled: false };
-    if (parseFloat(amount) === 0) return { text: 'Enter Amount', disabled: true };
-    if (parseFloat(amount) > parseFloat(userUSDCBalanceFormatted)) return { text: 'Insufficient USDC Balance', disabled: true };
-    if (!currentRoute.isActive) return { text: 'Route Not Available', disabled: true };
-    return { text: 'Transfer & Deposit', disabled: false };
+    if (totalLoading) return { text: "Loading Data...", disabled: true }
+    if (!isConnected) return { text: "Connect Wallet", disabled: false }
+    if (isWrongNetwork) return { text: "Switch Network", disabled: false }
+    if (!isCorrectFromNetwork) return { text: `Switch to ${fromChain.name}`, disabled: false }
+    if (isApprovalNeeded) return { text: `Approve USDC`, disabled: false }
+    if (Number.parseFloat(amount) === 0) return { text: "Enter Amount", disabled: true }
+    if (Number.parseFloat(amount) > Number.parseFloat(userUSDCBalanceFormatted))
+      return { text: "Insufficient USDC Balance", disabled: true }
+    if (!currentRoute.isActive) return { text: "Route Not Available", disabled: true }
+    return { text: "Transfer & Deposit", disabled: false }
   }, [
-    totalLoading, isConnected, isWrongNetwork, isCorrectFromNetwork, fromChain,
-    isApprovalNeeded, amount, userUSDCBalanceFormatted, currentRoute
-  ]);
-
+    totalLoading,
+    isConnected,
+    isWrongNetwork,
+    isCorrectFromNetwork,
+    fromChain,
+    isApprovalNeeded,
+    amount,
+    userUSDCBalanceFormatted,
+    currentRoute,
+  ])
 
   return (
     <div className="min-h-screen bg-black">
-      <div className="border-b border-gray-800 bg-gray-900/50">
-        <div className="max-w-4xl mx-auto px-6 py-4">
+      {/* Enhanced Header */}
+      <div className="border-b border-gray-800/50 bg-gradient-to-r from-gray-900/80 to-gray-800/80 backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => router.push('/dashboard')}
-              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              onClick={() => router.push("/dashboard")}
+              className="p-2 sm:p-3 hover:bg-gray-800/50 rounded-xl transition-all duration-200 hover:scale-110"
             >
               <ArrowLeft className="w-5 h-5 text-gray-400" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-white">Cross-Chain Transfer</h1>
-              <p className="text-gray-400">Bridge your USDC across networks with auto-yield deposit</p>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Cross-Chain Transfer</h1>
+              <p className="text-gray-400 text-sm sm:text-base">
+                Bridge your USDC across networks with auto-yield deposit
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {/* Alert Messages */}
         {!isConnected && (
-          <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700 rounded-xl">
+          <div className="mb-6 p-4 sm:p-6 bg-gradient-to-r from-yellow-900/30 to-yellow-800/30 border border-yellow-700/50 rounded-2xl backdrop-blur-sm">
             <div className="flex items-center space-x-3">
-              <Wallet className="w-5 h-5 text-yellow-500" />
+              <div className="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center border border-yellow-500/30">
+                <Wallet className="w-5 h-5 text-yellow-500" />
+              </div>
               <div>
-                <div className="text-yellow-400 font-medium">Wallet Not Connected</div>
+                <div className="text-yellow-400 font-medium text-sm sm:text-base">Wallet Not Connected</div>
                 <div className="text-sm text-gray-400">Please connect your wallet to continue</div>
               </div>
             </div>
@@ -482,76 +519,85 @@ const getErrorMessage = (error: unknown): string => {
         )}
 
         {isConnected && isWrongNetwork && (
-          <div className="mb-6 p-4 bg-red-900/20 border border-red-700 rounded-xl">
-            <div className="flex items-center justify-between">
+          <div className="mb-6 p-4 sm:p-6 bg-gradient-to-r from-red-900/30 to-red-800/30 border border-red-700/50 rounded-2xl backdrop-blur-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
               <div className="flex items-center space-x-3">
-                <AlertTriangle className="w-5 h-5 text-red-500" />
+                <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center border border-red-500/30">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                </div>
                 <div>
-                  <div className="text-red-400 font-medium">Wrong Network</div>
-                  <div className="text-sm text-gray-400">Please switch to a supported network (Sepolia, Base Sepolia, Arbitrum Sepolia).</div>
+                  <div className="text-red-400 font-medium text-sm sm:text-base">Wrong Network</div>
+                  <div className="text-sm text-gray-400">
+                    Please switch to a supported network (Sepolia, Base Sepolia, Arbitrum Sepolia).
+                  </div>
                 </div>
               </div>
               <button
                 onClick={switchToSupportedNetwork}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-xl hover:from-red-500 hover:to-red-400 transition-all duration-200 hover:scale-105 text-sm font-medium"
               >
                 Switch Network
               </button>
             </div>
           </div>
         )}
-        
+
         {isConnected && !isWrongNetwork && !isCorrectFromNetwork && (
-            <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700 rounded-xl">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                        <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                        <div>
-                            <div className="text-yellow-400 font-medium">Network Mismatch</div>
-                            <div className="text-sm text-gray-400">
-                                Your wallet is on {SUPPORTED_CHAINS_BY_ID[currentChainId!]?.name || 'an unknown network'}, but you selected {fromChain.name} as the source.
-                            </div>
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleTransfer}
-                        className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
-                        disabled={isApproving || isTransferring}
-                    >
-                        Switch to {fromChain.name}
-                    </button>
+          <div className="mb-6 p-4 sm:p-6 bg-gradient-to-r from-yellow-900/30 to-yellow-800/30 border border-yellow-700/50 rounded-2xl backdrop-blur-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center border border-yellow-500/30">
+                  <AlertTriangle className="w-5 h-5 text-yellow-500" />
                 </div>
+                <div>
+                  <div className="text-yellow-400 font-medium text-sm sm:text-base">Network Mismatch</div>
+                  <div className="text-sm text-gray-400">
+                    Your wallet is on {SUPPORTED_CHAINS_BY_ID[currentChainId!]?.name || "an unknown network"}, but you
+                    selected {fromChain.name} as the source.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleTransfer}
+                className="px-4 py-2 bg-gradient-to-r from-yellow-600 to-yellow-500 text-white rounded-xl hover:from-yellow-500 hover:to-yellow-400 transition-all duration-200 hover:scale-105 text-sm font-medium"
+                disabled={isApproving || isTransferring}
+              >
+                Switch to {fromChain.name}
+              </button>
             </div>
+          </div>
         )}
 
-        <div className="grid lg:grid-cols-2 gap-8">
+        {/* Main Content Grid */}
+        <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
+          {/* Left Column - Transfer Form */}
           <div className="space-y-6">
-            <div className="space-y-4">
+            <div className="space-y-6">
               <ChainSelector
                 chain={fromChain}
                 label="From Network"
                 onClick={() => setShowFromChainModal(true)}
                 disabled={isApproving || isTransferring}
               />
-              
+
               <div className="relative flex items-center justify-center">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-700"></div>
+                  <div className="w-full border-t border-gray-700/50"></div>
                 </div>
                 <div className="relative">
                   <button
                     onClick={handleSwapChains}
                     disabled={isApproving || isTransferring}
                     className={`
-                      p-2 rounded-xl border-2 transition-all duration-200
+                      p-3 rounded-2xl border-2 transition-all duration-300 backdrop-blur-sm
                       ${
                         !(isApproving || isTransferring)
-                          ? "bg-gray-900 border-gray-700 hover:border-yellow-500 hover:bg-gray-800"
-                          : "bg-gray-800 border-gray-600 cursor-not-allowed opacity-50"
+                          ? "bg-gradient-to-br from-gray-900/90 to-gray-800/90 border-gray-700/50 hover:border-yellow-500/50 hover:bg-gray-800/60 hover:scale-110 hover:rotate-180"
+                          : "bg-gray-800/50 border-gray-600/50 cursor-not-allowed opacity-50"
                       }
                     `}
                   >
-                    <ArrowUpDown className="w-4 h-4 text-gray-400" />
+                    <ArrowUpDown className="w-5 h-5 text-gray-400" />
                   </button>
                 </div>
               </div>
@@ -580,60 +626,83 @@ const getErrorMessage = (error: unknown): string => {
               onClick={handleTransfer}
               disabled={getButtonState.disabled || isApproving || isTransferring}
               className={`
-                w-full py-4 rounded-xl font-semibold text-lg transition-all duration-200
-                ${!getButtonState.disabled && !isApproving && !isTransferring
-                  ? 'bg-yellow-500 text-black hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/25'
-                  : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                w-full py-4 sm:py-5 rounded-2xl font-semibold text-base sm:text-lg transition-all duration-300
+                ${
+                  !getButtonState.disabled && !isApproving && !isTransferring
+                    ? "bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black hover:shadow-lg hover:shadow-yellow-500/25 hover:scale-[1.02]"
+                    : "bg-gradient-to-r from-gray-700 to-gray-600 text-gray-400 cursor-not-allowed"
                 }
               `}
             >
-              {isApproving ? 'Approving USDC...' : 
-               isTransferring ? 'Processing Transfer...' : 
-               getButtonState.text}
+              {isApproving ? (
+                <span className="flex items-center justify-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Approving USDC...</span>
+                </span>
+              ) : isTransferring ? (
+                <span className="flex items-center justify-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Processing Transfer...</span>
+                </span>
+              ) : (
+                getButtonState.text
+              )}
             </button>
           </div>
 
+          {/* Right Column - Summary and Info */}
           <div className="space-y-6">
             <TransferSummary
               fromChain={fromChain}
               toChain={toChain}
-              amount={amount || '0'}
+              amount={amount || "0"}
               estimatedFee={estimatedFeeFormatted}
               estimatedTime={currentRoute.estimatedTime}
-              isVisible={parseFloat(amount) > 0 || isTransferring || isApproving}
+              isVisible={Number.parseFloat(amount) > 0 || isTransferring || isApproving}
             />
 
-            <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
-              <h3 className="text-white font-semibold mb-3">Route Status</h3>
-              <div className="space-y-2">
-                {Object.values(SUPPORTED_CHAINS_BY_ID).map(chainA => (
-                  Object.values(SUPPORTED_CHAINS_BY_ID).map(chainB => {
-                    if (chainA.chainId === chainB.chainId) return null;
-                    const route = getTransferRoute(chainA.chainId, chainB.chainId);
+            {/* Route Status */}
+            <div className="bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-sm rounded-2xl p-4 sm:p-6 border border-gray-700/50">
+              <h3 className="text-white font-semibold mb-4 text-base sm:text-lg">Route Status</h3>
+              <div className="space-y-3">
+                {Object.values(SUPPORTED_CHAINS_BY_ID).map((chainA) =>
+                  Object.values(SUPPORTED_CHAINS_BY_ID).map((chainB) => {
+                    if (chainA.chainId === chainB.chainId) return null
+                    const route = getTransferRoute(chainA.chainId, chainB.chainId)
                     return (
-                      <div key={`${chainA.chainId}-${chainB.chainId}`} className="flex items-center justify-between">
-                        <span className="text-gray-400">{chainA.name} → {chainB.name}</span>
-                        <span className={`px-2 py-1 text-xs rounded ${
-                          route.isActive ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'
-                        }`}>
-                          {route.isActive ? 'Active' : 'Coming Soon'}
+                      <div
+                        key={`${chainA.chainId}-${chainB.chainId}`}
+                        className="flex items-center justify-between py-2 border-b border-gray-700/30 last:border-b-0"
+                      >
+                        <span className="text-gray-400 text-sm">
+                          {chainA.name} → {chainB.name}
+                        </span>
+                        <span
+                          className={`px-3 py-1 text-xs rounded-lg font-medium ${
+                            route.isActive
+                              ? "bg-gradient-to-r from-green-600/80 to-green-500/80 text-white border border-green-500/30"
+                              : "bg-gradient-to-r from-gray-600/80 to-gray-500/80 text-gray-300 border border-gray-500/30"
+                          }`}
+                        >
+                          {route.isActive ? "Active" : "Coming Soon"}
                         </span>
                       </div>
-                    );
-                  })
-                ))}
+                    )
+                  }),
+                )}
               </div>
             </div>
 
-            <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
-              <h3 className="text-white font-semibold mb-3">How It Works</h3>
-              <div className="space-y-2 text-sm text-gray-300">
+            {/* How It Works */}
+            <div className="bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-sm rounded-2xl p-4 sm:p-6 border border-gray-700/50">
+              <h3 className="text-white font-semibold mb-4 text-base sm:text-lg">How It Works</h3>
+              <div className="space-y-3">
                 {TRANSFER_STEPS.map((step, index) => (
-                  <div key={index} className="flex items-start space-x-2">
-                    <div className="w-5 h-5 rounded-full bg-yellow-500 text-black text-xs flex items-center justify-center font-bold mt-0.5">
+                  <div key={index} className="flex items-start space-x-3">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-400 text-black text-xs flex items-center justify-center font-bold mt-0.5 flex-shrink-0">
                       {index + 1}
                     </div>
-                    <div>{step}</div>
+                    <div className="text-sm text-gray-300 leading-relaxed">{step}</div>
                   </div>
                 ))}
               </div>
@@ -642,9 +711,10 @@ const getErrorMessage = (error: unknown): string => {
         </div>
       </div>
 
+      {/* Status Modal */}
       {showStatusModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 rounded-xl max-w-md w-full border border-gray-700 overflow-hidden">
+          <div className="bg-gradient-to-br from-gray-900/95 to-gray-800/95 backdrop-blur-xl rounded-2xl max-w-md w-full border border-gray-700/50 overflow-hidden shadow-2xl">
             <div className="p-6">
               <TransferStatusComponent
                 status={transferStatus.status}
@@ -659,53 +729,53 @@ const getErrorMessage = (error: unknown): string => {
                 isTransactionConfirmed={transferStatus.isTransactionConfirmed}
               />
             </div>
-            <div className="border-t border-gray-700 p-4 bg-gray-800/50">
+            <div className="border-t border-gray-700/50 p-4 bg-gray-800/30">
               <button
                 onClick={handleCloseStatusModal}
-                disabled={false} // Removed disabled condition, allowing close during bridging
-                className={`w-full py-3 rounded-lg transition-colors text-white ${
-                  transferStatus.status === 'bridging'
-                    ? 'bg-gray-600 hover:bg-gray-500' // Still indicate it's active
-                    : 'bg-gray-700 hover:bg-gray-600'
-                }`}
+                className={`w-full py-3 rounded-xl transition-all duration-200 text-white font-medium ${
+                  transferStatus.status === "bridging"
+                    ? "bg-gradient-to-r from-gray-600 to-gray-500 hover:from-gray-500 hover:to-gray-400"
+                    : "bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500"
+                } hover:scale-[1.02]`}
               >
-                {transferStatus.status === 'completed'
-                  ? 'Done'
-                  : transferStatus.status === 'failed' ? 'Close' : 'Close' // Always 'Close' if not completed/failed
-                }
+                {transferStatus.status === "completed"
+                  ? "Done"
+                  : transferStatus.status === "failed"
+                    ? "Close"
+                    : "Close"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-          {/* Chain Selection Modals */}
+      {/* Chain Selection Modals */}
       <ChainSelectionModal
         isOpen={showFromChainModal}
         onClose={() => setShowFromChainModal(false)}
-        chains={Object.values(SUPPORTED_CHAINS_BY_ID).filter(c => c.isSupported)} // Use new unified list
-        onSelectChain={(chain) => { // Changed prop name to onSelectChain
-          setFromChain(chain);
-          setShowFromChainModal(false);
-          setAmount(''); // Clear amount when changing chains
+        chains={Object.values(SUPPORTED_CHAINS_BY_ID).filter((c) => c.isSupported)}
+        onSelectChain={(chain) => {
+          setFromChain(chain)
+          setShowFromChainModal(false)
+          setAmount("")
         }}
-        currentChain={fromChain} // Passed current fromChain
+        currentChain={fromChain}
         title="Select Source Network"
-        excludeChain={toChain} // Exclude toChain from selection
+        excludeChain={toChain}
       />
 
       <ChainSelectionModal
         isOpen={showToChainModal}
         onClose={() => setShowToChainModal(false)}
-        chains={Object.values(SUPPORTED_CHAINS_BY_ID).filter(c => c.isSupported)} // Use new unified list
-        onSelectChain={(chain) => { // Changed prop name to onSelectChain
-          setToChain(chain);
-          setShowToChainModal(false);
-          setAmount(''); // Clear amount when changing chains
+        chains={Object.values(SUPPORTED_CHAINS_BY_ID).filter((c) => c.isSupported)}
+        onSelectChain={(chain) => {
+          setToChain(chain)
+          setShowToChainModal(false)
+          setAmount("")
         }}
-        currentChain={toChain} // Passed current toChain
+        currentChain={toChain}
         title="Select Destination Network"
-        excludeChain={fromChain} // Exclude fromChain from selection
+        excludeChain={fromChain}
       />
     </div>
   )

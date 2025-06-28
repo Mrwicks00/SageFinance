@@ -1,45 +1,56 @@
 "use client"
+
 import { useState } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
+import { useScrollAnimation, useStaggeredAnimation } from "../../hooks/use-scroll-animation"
 
 // Sample FAQ data for demonstration
 const FAQ_DATA = [
   {
     id: "1",
     question: "What is SageFi and how does it work?",
-    answer: "SageFi is a comprehensive financial platform that combines AI-powered insights with traditional investment tools. Our platform analyzes market trends, provides personalized recommendations, and helps you make informed financial decisions through advanced algorithms and real-time data processing."
+    answer:
+      "SageFi is a comprehensive financial platform that combines AI-powered insights with traditional investment tools. Our platform analyzes market trends, provides personalized recommendations, and helps you make informed financial decisions through advanced algorithms and real-time data processing.",
   },
   {
-    id: "2", 
+    id: "2",
     question: "How secure is my financial data on SageFi?",
-    answer: "We employ bank-level security measures including 256-bit SSL encryption, two-factor authentication, and regular security audits. Your data is stored in secure, compliant data centers and we never share your personal information with third parties without your explicit consent."
+    answer:
+      "We employ bank-level security measures including 256-bit SSL encryption, two-factor authentication, and regular security audits. Your data is stored in secure, compliant data centers and we never share your personal information with third parties without your explicit consent.",
   },
   {
     id: "3",
     question: "What fees does SageFi charge?",
-    answer: "SageFi offers transparent pricing with no hidden fees. Our basic plan is free for up to $10,000 in assets, with premium plans starting at $9.99/month. We charge a small management fee of 0.25% annually for managed portfolios, which is significantly lower than traditional financial advisors."
+    answer:
+      "SageFi offers transparent pricing with no hidden fees. Our basic plan is free for up to $10,000 in assets, with premium plans starting at $9.99/month. We charge a small management fee of 0.25% annually for managed portfolios, which is significantly lower than traditional financial advisors.",
   },
   {
     id: "4",
     question: "Can I withdraw my funds at any time?",
-    answer: "Yes, you have complete control over your funds. You can withdraw your money at any time without penalties. Most withdrawals are processed within 1-3 business days, depending on your bank and the type of account you're withdrawing from."
+    answer:
+      "Yes, you have complete control over your funds. You can withdraw your money at any time without penalties. Most withdrawals are processed within 1-3 business days, depending on your bank and the type of account you're withdrawing from.",
   },
   {
     id: "5",
     question: "Do you offer customer support?",
-    answer: "Absolutely! We provide 24/7 customer support through multiple channels including live chat, email, and phone. Our team of financial experts and technical specialists are always ready to help you with any questions or concerns you may have."
-  }
+    answer:
+      "We provide 24/7 customer support through multiple channels including live chat, email, and phone. Our team of financial experts and technical specialists are always ready to help you with any questions or concerns you may have.",
+  },
 ]
 
-export  function FAQSection() {
+export function FAQSection() {
   const [openItems, setOpenItems] = useState<string[]>([])
 
+  const headerAnimation = useScrollAnimation({ animation: "slide-up", duration: 800 })
+  const faqAnimations = useStaggeredAnimation(FAQ_DATA.length, {
+    animation: "slide-up",
+    stagger: 100,
+    duration: 500,
+  })
+  const ctaAnimation = useScrollAnimation({ animation: "scale-up", duration: 600, delay: 400 })
+
   const toggleItem = (id: string) => {
-    setOpenItems((prev) => 
-      prev.includes(id) 
-        ? prev.filter((item) => item !== id) 
-        : [...prev, id]
-    )
+    setOpenItems((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))
   }
 
   return (
@@ -48,10 +59,8 @@ export  function FAQSection() {
         {/* Reduced max width for better readability */}
         <div className="max-w-3xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6">
-              Frequently Asked Questions
-            </h2>
+          <div ref={headerAnimation.ref} className={`text-center mb-16 ${headerAnimation.className}`}>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6">Frequently Asked Questions</h2>
             <p className="text-xl text-gray-300 max-w-2xl mx-auto">
               Everything you need to know about SageFi and our platform
             </p>
@@ -59,13 +68,13 @@ export  function FAQSection() {
 
           {/* FAQ Items */}
           <div className="space-y-3">
-            {FAQ_DATA.map((item) => {
+            {FAQ_DATA.map((item, index) => {
               const isOpen = openItems.includes(item.id)
-
               return (
                 <div
                   key={item.id}
-                  className="bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden transition-all duration-300 hover:border-gray-700 hover:bg-gray-900/70"
+                  ref={faqAnimations[index].ref}
+                  className={`bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden transition-all duration-300 hover:border-gray-700 hover:bg-gray-900/70 transform hover:scale-[1.02] ${faqAnimations[index].className}`}
                 >
                   <button
                     onClick={() => toggleItem(item.id)}
@@ -84,21 +93,17 @@ export  function FAQSection() {
                   </button>
 
                   {/* Animated content area */}
-                  <div 
+                  <div
                     className={`transition-all duration-300 ease-in-out ${
-                      isOpen 
-                        ? 'max-h-96 opacity-100' 
-                        : 'max-h-0 opacity-0'
+                      isOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
                     }`}
                     style={{
-                      overflow: 'hidden'
+                      overflow: "hidden",
                     }}
                   >
                     <div className="px-6 pb-6">
                       <div className="border-t border-gray-800/50 pt-4">
-                        <p className="text-gray-300 leading-relaxed text-base">
-                          {item.answer}
-                        </p>
+                        <p className="text-gray-300 leading-relaxed text-base">{item.answer}</p>
                       </div>
                     </div>
                   </div>
@@ -108,8 +113,8 @@ export  function FAQSection() {
           </div>
 
           {/* Contact CTA */}
-          <div className="text-center mt-16">
-            <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-8">
+          <div ref={ctaAnimation.ref} className={`text-center mt-16 ${ctaAnimation.className}`}>
+            <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-8 transform hover:scale-[1.02] transition-transform duration-300">
               <p className="text-gray-400 mb-6 text-lg">Still have questions?</p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <a
@@ -119,9 +124,9 @@ export  function FAQSection() {
                   Contact Support
                 </a>
                 <span className="text-gray-600 hidden sm:block">•</span>
-                <a 
-                  href="/docs" 
-                  className="text-yellow-400 hover:text-yellow-300 transition-colors duration-200 font-medium border border-yellow-400/30 hover:border-yellow-400/50 px-6 py-3 rounded-xl hover:bg-yellow-400/5"
+                <a
+                  href="/docs"
+                  className="text-yellow-400 hover:text-yellow-300 transition-colors duration-200 font-medium border border-yellow-400/30 hover:border-yellow-400/50 px-6 py-3 rounded-xl hover:bg-yellow-400/5 hover:scale-105 transform duration-200"
                 >
                   Read Documentation
                 </a>
