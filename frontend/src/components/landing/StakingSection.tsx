@@ -3,6 +3,7 @@ import { Button } from "../../components/ui/Button"
 import { STAKING_FEATURES, WEEKLY_REWARDS } from "../../data/staking"
 import { Coins, Gift, Zap } from "lucide-react"
 import { useScrollAnimation, useStaggeredAnimation } from "../../hooks/use-scroll-animation"
+import Link from "next/link"
 
 export function StakingSection() {
   const headerAnimation = useScrollAnimation({ animation: "slide-up", duration: 800 })
@@ -93,19 +94,25 @@ export function StakingSection() {
                 <li>• Fair distribution every week</li>
                 <li>• Automatic reward distribution</li>
               </ul>
-              <Button className="w-full mt-4 transform hover:scale-105 transition-transform duration-300" size="sm">
+             <Link href="/staking">
+             <Button className="w-full mt-4 transform hover:scale-105 transition-transform duration-300" size="sm">
                 <Coins className="w-4 h-4 mr-2" />
                 Start Earning Rewards
               </Button>
+             
+             </Link>
             </div>
           </div>
         </div>
 
         {/* CTA Section */}
         <div ref={ctaAnimation.ref} className={`text-center ${ctaAnimation.className}`}>
+          <Link href="/staking">
+          
           <Button size="lg" className="mr-4 transform hover:scale-105 transition-transform duration-300">
             Start Staking SAGE
           </Button>
+          </Link>
           <Button
             variant="outline"
             size="lg"

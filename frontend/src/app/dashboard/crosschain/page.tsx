@@ -330,6 +330,15 @@ export default function CrossChainPage() {
     performTransfer,
   ])
 
+  useEffect(() => {
+    if (isConnected && isCorrectFromNetwork) {
+      
+      refetchAllowance();
+      refetchUSDCBalance();
+      refetchFee();
+    }
+  }, [isConnected, isCorrectFromNetwork, fromChain.chainId, refetchAllowance, refetchUSDCBalance, refetchFee]);
+
   // Handle approval error
   useEffect(() => {
     if (approveError && shouldContinueAfterApproval) {

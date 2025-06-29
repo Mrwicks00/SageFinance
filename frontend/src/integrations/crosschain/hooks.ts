@@ -19,7 +19,7 @@ import {
 } from './constants';
 import { toast } from 'react-toastify';
 
-// import { useErc20Allowance, useApproveErc20, ERC20_ABI } from '@/integrations/erc20/hooks';
+import { useErc20Allowance, useApproveErc20, ERC20_ABI } from '@/integrations/erc20/hooks';
 
 
 // --- Hook to get CCIP transfer fee ---
@@ -154,36 +154,47 @@ export function useTransferCrossChain(
   }, [amount]);
 
   // Enhanced simulation with better error handling
+
   const {
-    data: simulateData,
-    error: simulateError,
-    isLoading: isSimulating,
-  } = useSimulateContract({
-    address: sourceManagerAddress,
-    abi: CrossChainManagerABI,
-    functionName: 'transferCrossChain',
-    args: [
-      parsedAmount,
-      destinationChainSelector as bigint,
-      receiverAddress || userAddress as Address
-    ],
-    value: feeRaw,
-    query: {
-      enabled:
-        isValidChainConfiguration &&
-        !!sourceManagerAddress &&
-        !!destinationChainSelector &&
-        !!usdcAddressOnSource &&
-        parsedAmount > 0n &&
-        !!feeRaw &&
-        feeRaw > 0n &&
-        !!(receiverAddress || userAddress) &&
-        !isLoadingFee && 
-        !isErrorFee &&
-        !!currentChainId && 
-        !!destinationChainId,
-    },
-  });
+    allowance: currentAllowance,
+    isLoading: isLoadingCurrentAllowance,
+    refetch: refetchCurrentAllowance,
+  } = useErc20Allowance(usdcAddressOnSource, sourceManagerAddress);
+
+
+  const {
+  data: simulateData,
+  error: simulateError,
+  isLoading: isSimulating,
+} = useSimulateContract({
+  address: sourceManagerAddress,
+  abi: CrossChainManagerABI,
+  functionName: 'transferCrossChain',
+  args: [
+    parsedAmount,
+    destinationChainSelector as bigint,
+    receiverAddress || userAddress as Address
+  ],
+  value: feeRaw,
+  query: {
+    enabled:
+      isValidChainConfiguration &&
+      !!sourceManagerAddress &&
+      !!destinationChainSelector &&
+      !!usdcAddressOnSource &&
+      parsedAmount > 0n &&
+      !!feeRaw &&
+      feeRaw > 0n &&
+      !!(receiverAddress || userAddress) &&
+      !isLoadingFee && 
+      !isErrorFee &&
+      !!currentChainId && 
+      !!destinationChainId &&
+      !isLoadingCurrentAllowance &&
+      currentAllowance !== undefined &&
+      currentAllowance >= parsedAmount, // Add this allowance check
+  },
+});
 
   // Add logging for simulation errors
   useMemo(() => {
@@ -265,13 +276,26 @@ export function useTransferCrossChain(
       toast.error("Invalid chain configuration. Please check chain support.");
       return;
     }
-
+  
+    // Add explicit allowance check before attempting transfer
+    if (currentAllowance === undefined || currentAllowance < parsedAmount) {
+      toast.error("Insufficient USDC allowance. Please approve USDC first.");
+      console.error("Allowance check failed:", {
+        currentAllowance: currentAllowance?.toString(),
+        parsedAmount: parsedAmount.toString(),
+        hasAllowance: currentAllowance !== undefined,
+        isAllowanceSufficient: currentAllowance !== undefined && currentAllowance >= parsedAmount
+      });
+      return;
+    }
+  
     if (simulateData?.request) {
       console.log('Executing transfer with config:', {
         sourceChain: currentChainId,
         destinationChain: destinationChainId,
         amount: parsedAmount.toString(),
-        fee: feeRaw?.toString()
+        fee: feeRaw?.toString(),
+        allowance: currentAllowance.toString()
       });
       transfer(simulateData.request);
     } else if (simulateError) {
@@ -279,24 +303,27 @@ export function useTransferCrossChain(
       let errorMessage = simulateError.message || 'Unknown simulation error';
       
       // Check for common CCIP errors
-      if (errorMessage.includes('router')) {
+      if (errorMessage.includes('allowance') || errorMessage.includes('ERC20: transfer amount exceeds allowance')) {
+        errorMessage = 'Insufficient USDC allowance. Please approve USDC first.';
+        // Trigger allowance refetch
+        refetchCurrentAllowance();
+      } else if (errorMessage.includes('router')) {
         errorMessage = 'CCIP Router error. This route may not be supported.';
       } else if (errorMessage.includes('selector')) {
         errorMessage = 'Invalid destination chain selector. This route may not be active.';
       } else if (errorMessage.includes('fee')) {
         errorMessage = 'Insufficient fee for cross-chain transfer.';
-      } else if (errorMessage.includes('allowance')) {
-        errorMessage = 'Insufficient USDC allowance.';
       } else if (errorMessage.includes('balance')) {
         errorMessage = 'Insufficient USDC balance.';
       }
-
+  
       toast.error(`Transaction simulation failed: ${errorMessage}`);
       console.error("Simulation error:", simulateError);
     } else {
       toast.error("Transfer not ready: Simulation data missing.");
     }
-  }, [simulateData, simulateError, transfer, isValidChainConfiguration, currentChainId, destinationChainId, parsedAmount, feeRaw]);
+  }, [simulateData, simulateError, transfer, isValidChainConfiguration, currentChainId, destinationChainId, parsedAmount, feeRaw, currentAllowance, refetchCurrentAllowance]);
+  
 
   const isLoading = isSimulating || isWritePending || isConfirming || isLoadingFee;
   const isError = !!simulateError || !!writeError || isConfirmError || !!errorFee || !isValidChainConfiguration;
@@ -310,7 +337,8 @@ export function useTransferCrossChain(
     isSuccess: isConfirmed && !!ccipMessageId,
     isError,
     error,
-    refetchEstimatedFee, // Now returning the refetch function
+    refetchEstimatedFee,
+    refetchCurrentAllowance, // Add this
     isValidChainConfiguration
   };
 }
