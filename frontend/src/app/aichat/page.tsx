@@ -40,17 +40,17 @@ const mockTransactionPreviews: TransactionPreview[] = [
     action: "Supply USDC",
     amount: "1,000",
     token: "USDC",
-    apy: "4.2%",
-    gasEstimate: "$12.50",
+    apy: "3.2%",
+    gasEstimate: "$4.50",
     logo: "🏦",
   },
 ]
 
 const mockResponses = [
   "I can help you find the best USDC yields across different DeFi protocols. Let me analyze the current market conditions.",
-  "Based on current market data, here are some high-yield USDC opportunities I found for you.",
+  "Based on current market data, this is some high-yield USDC opportunities I found for you.",
   "I've found several bridging options to Base network. Here are the most cost-effective routes.",
-  "Let me help you rebalance your portfolio based on your risk tolerance and market conditions.",
+  "Let me help you rebalance your dashboard based on your risk tolerance and market conditions.",
 ]
 
 export default function AIPage() {

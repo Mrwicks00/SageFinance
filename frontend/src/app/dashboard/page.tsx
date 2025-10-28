@@ -1,25 +1,14 @@
-// src/app/dashboard/page.tsx
 "use client";
-
-// REMOVE DashboardHeader and DashboardSidebar imports here
-// import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-// import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 
 import { PortfolioOverview } from "@/components/dashboard/PortfolioOverview";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { AISuggestions } from "@/components/dashboard/AISuggestions";
 
-export default function DashboardOverviewPage() { // Renamed for clarity, though `DashboardPage` is fine too
+export default function DashboardOverviewPage() { 
   return (
     // This div now only contains the page-specific content
-    <div> {/* Removed min-h-screen, bg-black, and flex from here as they are in the layout */}
-      {/* Header - Not needed here, it's in the layout */}
-      {/* Sidebar - Not needed here, it's in the layout */}
-      
-      {/* No need for max-w-7xl mx-auto on the outer div if the layout's main already has it,
-          but if you want *this page's* content to be centered, keep it. 
-          I've kept it as it implies the inner content's max width. */}
+    <div> 
       <div>
         {/* Welcome Section */}
         <div className="mb-8">

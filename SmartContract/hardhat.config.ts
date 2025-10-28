@@ -28,18 +28,18 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
-    sepolia: {
-      url: `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, // Or Infura URL
-      accounts: [
-        `0x${PRIVATE_KEY}`,   // Your first account
-        `0x${PRIVATE_KEY_2}`  // <--- Your second account
-      ],
-      gasPrice: 20000000000, // 20 Gwei (adjust as needed, 20 is often good for testnets)
-    },
+    // sepolia: {
+    //   url: `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, // Or Infura URL
+    //   accounts: [
+    //     `0x${PRIVATE_KEY}`,   // Your first account
+    //     `0x${PRIVATE_KEY_2}`  // <--- Your second account
+    //   ],
+    //   gasPrice: 20000000000, // 20 Gwei (adjust as needed, 20 is often good for testnets)
+    // },
     "base-sepolia": {
       url: "https://sepolia.base.org", // Official Base Sepolia RPC
       accounts: [`0x${PRIVATE_KEY}`],
-      gasPrice: 1000000000, // 1 Gwei (Base typically has lower gas prices)
+      gasPrice: 100000, // 1 Gwei (Base typically has lower gas prices)
       chainId: 84532, // Base Sepolia chain ID
     },
     "arbitrum-sepolia": {
