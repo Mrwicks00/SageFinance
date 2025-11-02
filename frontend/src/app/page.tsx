@@ -2,23 +2,31 @@
 
 import { Header } from "../components/layout/Header"
 import { Footer } from "../components/layout/Footer"
-import { HeroSection } from "../components/landing/HeroSection"
+import { EnhancedHeroSection } from "../components/landing/EnhancedHeroSection"
 import { TrustIndicators } from "../components/landing/TrustIndicators"
+import { HowItWorksSection } from "../components/landing/HowItWorksSection"
 import { FeatureGrid } from "../components/landing/FeatureGrid"
-import { AIIntegrationSection } from "../components/landing/AIIntegrationSection" // Add here
+import { MetricsSection } from "../components/landing/MetricsSection"
+import { AIIntegrationSection } from "../components/landing/AIIntegrationSection"
 import { StakingSection } from "../components/landing/StakingSection"
+import { TestimonialsSection } from "../components/landing/TestimonialsSection"
 import { FAQSection } from "../components/landing/FAQSection"
+import { FinalCTASection } from "../components/landing/FinalCTASection"
 
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-black">
       <Header />
-      <HeroSection />
+      <EnhancedHeroSection />
       <TrustIndicators />
+      <HowItWorksSection />
+      <MetricsSection />
       <FeatureGrid />
-      <AIIntegrationSection /> 
+      <AIIntegrationSection />
       <StakingSection />
+      <TestimonialsSection />
       <FAQSection />
+      <FinalCTASection />
       <Footer />
     </main>
   )
